@@ -1,0 +1,18 @@
+{
+    "name": "VolumeBox.Gearbox.Tests",
+    "rootNamespace": "VolumeBox.Gearbox.Tests",
+    "references": [
+        "GUID:41be746dfe29c2c4c82f6107618c6c60"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
