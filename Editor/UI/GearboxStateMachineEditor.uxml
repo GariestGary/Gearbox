@@ -1,6 +1,0 @@
-<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="True">
-    <ui:VisualElement style="flex-grow: 1;">
-        <uie:ObjectField label="Object Field" data-source-type="VolumeBox.Gearbox.Editor.StateMachineGraph, VolumeBox.Gearbox.Editor" type="UnityEditor.DefaultAsset, UnityEditor.CoreModule" />
-        <ui:Button text="Open Graph" name="open_graph_button" />
-    </ui:VisualElement>
-</ui:UXML>
