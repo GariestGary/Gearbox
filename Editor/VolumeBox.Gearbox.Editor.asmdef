@@ -2,9 +2,8 @@
     "name": "VolumeBox.Gearbox.Editor",
     "rootNamespace": "VolumeBox.Gearbox.Editor",
     "references": [
-        "GUID:70ef9a24f4cfc4aec911c1414e3f90ad",
         "GUID:41be746dfe29c2c4c82f6107618c6c60",
-        "GUID:d1e08c06f8f9473888c892637c83c913"
+        "GUID:343deaaf83e0cee4ca978e7df0b80d21"
     ],
     "includePlatforms": [
         "Editor"

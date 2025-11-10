@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using VolumeBox.Gearbox.Core;
@@ -13,20 +17,29 @@ namespace VolumeBox.Gearbox.Editor
         private bool _isPanning;
         private StateNode _connectingFrom;
         private StateTransition _selectedTransition;
-        private readonly System.Collections.Generic.List<TransitionRenderInfo> _transitionRenderInfos = new System.Collections.Generic.List<TransitionRenderInfo>();
+        private readonly List<TransitionRenderInfo> _transitionRenderInfos = new();
+        private readonly Dictionary<string, bool> _nodeExpandedStates = new();
+        private SerializedObject _serializedStateMachine;
+        private SerializedProperty _nodesProperty;
+        private float _zoom = 1.0f;
 
-        private static readonly Vector2 NodeSize = new Vector2(160, 60);
-        private static readonly Color GridMinorColor = new Color(0f, 0f, 0f, 0.2f);
-        private static readonly Color GridMajorColor = new Color(0f, 0f, 0f, 0.4f);
-        private static readonly Color EdgeColor = new Color(0.3f, 0.8f, 1f, 1f);
-        private static readonly Color NodeColor = new Color(0.18f, 0.18f, 0.18f, 1f);
-        private static readonly Color NodeSelectedColor = new Color(0.30f, 0.30f, 0.30f, 1f);
-        private static readonly Color NodeBorderColor = new Color(0.05f, 0.05f, 0.05f, 1f);
-        private static readonly float ArrowSize = 10f;
+        private static readonly Vector2 BaseNodeSize = new(250, 80);
+        private const float FieldHeight = 18f;
+        private const float FieldSpacing = 2f;
+        private const float MinZoom = 0.25f;
+        private const float MaxZoom = 2.0f;
+        private const float ZoomStep = 0.1f;
+        private static readonly Color GridMinorColor = new(0f, 0f, 0f, 0.2f);
+        private static readonly Color GridMajorColor = new(0f, 0f, 0f, 0.4f);
+        private static readonly Color EdgeColor = new(0.3f, 0.8f, 1f, 1f);
+        private static readonly Color NodeColor = new(0.18f, 0.18f, 0.18f, 1f);
+        private static readonly Color NodeSelectedColor = new(0.30f, 0.30f, 0.30f, 1f);
+        private static readonly Color NodeBorderColor = new(0.05f, 0.05f, 0.05f, 1f);
+        private static readonly Color InitialStateBorderColor = new(0.0f, 0.8f, 0.0f, 1f);
+        private const float ArrowSize = 10f;
         private const float BaseEdgeWidth = 4f;
         private const float SelectedEdgeWidth = 6f;
         private const float EdgeSelectionRadius = 8f;
-        private const float ReciprocalCurveOffset = 40f;
 
         private struct TransitionRenderInfo
         {
@@ -40,12 +53,68 @@ namespace VolumeBox.Gearbox.Editor
         {
             var window = GetWindow<StateMachineGraphWindow>("State Machine Graph");
             window._stateMachine = stateMachine;
+            window.RefreshSerializedObject();
             window.Show();
         }
 
         private void OnEnable()
         {
             wantsMouseMove = true;
+            RefreshSerializedObject();
+        }
+        
+        private void RefreshSerializedObject()
+        {
+            if (_stateMachine != null)
+            {
+                _serializedStateMachine = new SerializedObject(_stateMachine);
+                _nodesProperty = _serializedStateMachine.FindProperty("nodes");
+            }
+        }
+        
+        private void OnDisable()
+        {
+            _serializedStateMachine = null;
+            _nodesProperty = null;
+        }
+        
+        private bool IsNodeExpanded(StateNode node)
+        {
+            _nodeExpandedStates.TryAdd(node.id, false);
+            return _nodeExpandedStates[node.id];
+        }
+        
+        private void SetNodeExpanded(StateNode node, bool expanded)
+        {
+            _nodeExpandedStates[node.id] = expanded;
+        }
+        
+        private float GetNodeHeight(StateNode node)
+        {
+            var height = BaseNodeSize.y;
+            
+            if (!IsNodeExpanded(node) || node.state == null) return height;
+            
+            height += 18; // Foldout height
+            var stateType = node.state.GetType();
+            var fields = stateType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            
+            foreach (var field in fields)
+            {
+                if (field.GetCustomAttributes(typeof(StateVariableAttribute), true).Length <= 0) continue;
+                
+                var fieldType = field.FieldType;
+                if (fieldType == typeof(Vector2) || fieldType == typeof(Vector3))
+                {
+                    height += FieldHeight * 2 + FieldSpacing; // Vector fields take more space
+                }
+                else
+                {
+                    height += FieldHeight + FieldSpacing;
+                }
+            }
+            height += 10; // Extra padding
+            return height;
         }
 
         private void OnGUI()
@@ -55,6 +124,15 @@ namespace VolumeBox.Gearbox.Editor
                 EditorGUILayout.HelpBox("No StateMachine selected.", MessageType.Info);
                 return;
             }
+            
+            // Toolbar with settings
+            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Settings", EditorStyles.toolbarButton, GUILayout.Width(80)))
+            {
+                GearboxSettingsWindow.ShowWindow();
+            }
+            EditorGUILayout.EndHorizontal();
 
             DrawGrid(20, 0.2f, GridMinorColor);
             DrawGrid(100, 0.4f, GridMajorColor);
@@ -73,24 +151,25 @@ namespace VolumeBox.Gearbox.Editor
 
         private void DrawGrid(float gridSpacing, float gridOpacity, Color gridColor)
         {
-            int widthDivs = Mathf.CeilToInt(position.width / gridSpacing);
-            int heightDivs = Mathf.CeilToInt(position.height / gridSpacing);
+            var scaledGridSpacing = gridSpacing * _zoom;
+            var widthDivs = Mathf.CeilToInt(position.width / scaledGridSpacing);
+            var heightDivs = Mathf.CeilToInt(position.height / scaledGridSpacing);
 
             Handles.BeginGUI();
             Handles.color = new Color(gridColor.r, gridColor.g, gridColor.b, gridOpacity);
 
-            Vector3 newOffset = new Vector3(_panOffset.x % gridSpacing, _panOffset.y % gridSpacing, 0);
+            var newOffset = new Vector3(_panOffset.x % scaledGridSpacing, _panOffset.y % scaledGridSpacing, 0);
 
-            for (int i = 0; i < widthDivs; i++)
+            for (var i = 0; i < widthDivs; i++)
             {
-                Handles.DrawLine(new Vector3(gridSpacing * i, -gridSpacing, 0) + newOffset,
-                    new Vector3(gridSpacing * i, position.height, 0f) + newOffset);
+                Handles.DrawLine(new Vector3(scaledGridSpacing * i, -scaledGridSpacing, 0) + newOffset,
+                    new Vector3(scaledGridSpacing * i, position.height, 0f) + newOffset);
             }
 
-            for (int j = 0; j < heightDivs; j++)
+            for (var j = 0; j < heightDivs; j++)
             {
-                Handles.DrawLine(new Vector3(-gridSpacing, gridSpacing * j, 0) + newOffset,
-                    new Vector3(position.width, gridSpacing * j, 0f) + newOffset);
+                Handles.DrawLine(new Vector3(-scaledGridSpacing, scaledGridSpacing * j, 0) + newOffset,
+                    new Vector3(position.width, scaledGridSpacing * j, 0f) + newOffset);
             }
 
             Handles.color = Color.white;
@@ -107,13 +186,15 @@ namespace VolumeBox.Gearbox.Editor
 
         private Rect GetNodeRect(StateNode node)
         {
-            Vector2 pos = node.position + _panOffset;
-            return new Rect(pos, NodeSize);
+            var pos = (node.position * _zoom) + _panOffset;
+            var height = GetNodeHeight(node) * _zoom;
+            return new Rect(pos, new Vector2(BaseNodeSize.x * _zoom, height));
         }
 
         private void BuildTransitionRenderCache()
         {
             _transitionRenderInfos.Clear();
+            
             if (_stateMachine == null) return;
 
             foreach (var transition in _stateMachine.Transitions)
@@ -124,15 +205,15 @@ namespace VolumeBox.Gearbox.Editor
 
                 var renderInfo = new TransitionRenderInfo { Transition = transition };
 
-                Rect fromRect = GetNodeRect(fromNode);
-                Rect toRect = GetNodeRect(toNode);
-                Vector2 fromCenter = fromRect.center;
-                Vector2 toCenter = toRect.center;
-                Vector2 direction = (toCenter - fromCenter).normalized;
-                Vector2 perpendicular = new Vector2(-direction.y, direction.x);
+                var fromRect = GetNodeRect(fromNode);
+                var toRect = GetNodeRect(toNode);
+                var fromCenter = fromRect.center;
+                var toCenter = toRect.center;
+                var direction = (toCenter - fromCenter).normalized;
+                var perpendicular = new Vector2(-direction.y, direction.x);
 
                 // Check if there's a reciprocal transition (bidirectional connection)
-                bool hasReciprocal = _stateMachine.Transitions.Exists(t =>
+                var hasReciprocal = _stateMachine.Transitions.Exists(t =>
                     t != transition && t.fromId == transition.toId && t.toId == transition.fromId);
 
                 Vector2 startPoint, endPoint;
@@ -140,10 +221,10 @@ namespace VolumeBox.Gearbox.Editor
                 {
                     // Offset both transitions in the same perpendicular direction for parallel lines
                     const float offsetDistance = 8f;
-                    Vector2 offset = perpendicular * offsetDistance;
+                    var offset = perpendicular * offsetDistance;
 
-                    Vector2 offsetFromCenter = fromCenter + offset;
-                    Vector2 offsetToCenter = toCenter + offset;
+                    var offsetFromCenter = fromCenter + offset;
+                    var offsetToCenter = toCenter + offset;
 
                     startPoint = TryGetLineRectIntersection(offsetFromCenter, offsetToCenter, fromRect, out var intersection)
                         ? intersection : offsetFromCenter;
@@ -167,57 +248,103 @@ namespace VolumeBox.Gearbox.Editor
             }
         }
 
-        private Vector3[] BuildBezierPoints(Vector2 start, Vector2 control1, Vector2 control2, Vector2 end, int segments)
-        {
-            var points = new Vector3[segments + 1];
-            for (int i = 0; i <= segments; i++)
-            {
-                float t = i / (float)segments;
-                points[i] = CalculateCubicBezierPoint(t, start, control1, control2, end);
-            }
-            return points;
-        }
-
-        private Vector3 CalculateCubicBezierPoint(float t, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)
-        {
-            float u = 1f - t;
-            float tt = t * t;
-            float uu = u * u;
-            float uuu = uu * u;
-            float ttt = tt * t;
-
-            Vector2 point = uuu * p0;
-            point += 3f * uu * t * p1;
-            point += 3f * u * tt * p2;
-            point += ttt * p3;
-            return point;
-        }
-
         private void DrawNode(StateNode node)
         {
-            Rect rect = GetNodeRect(node);
+            // Calculate screen-space rect for mouse interactions
+            var screenRect = GetNodeRect(node);
+            
+            // Apply zoom scaling matrix for the entire node (border, fill, and contents)
+            var originalMatrix = GUI.matrix;
+            
+            // Create a matrix that combines pan offset, zoom, and node position
+            var nodeGraphPos = node.position;
+            var nodeTranslationMatrix = Matrix4x4.Translate(new Vector3(nodeGraphPos.x, nodeGraphPos.y, 0));
+            var scaleMatrix = Matrix4x4.Scale(new Vector3(_zoom, _zoom, 1f));
+            var panTranslationMatrix = Matrix4x4.Translate(new Vector3(_panOffset.x, _panOffset.y, 0));
+            
+            GUI.matrix = panTranslationMatrix * scaleMatrix * nodeTranslationMatrix;
+            
+            // Calculate node rect in local space (starting from origin)
+            var localNodeRect = new Rect(0, 0, BaseNodeSize.x, GetNodeHeight(node));
+            
+            // Draw node background and border with the matrix applied
             var bodyColor = node == _selectedNode ? NodeSelectedColor : NodeColor;
-            EditorGUI.DrawRect(rect, bodyColor);
+            EditorGUI.DrawRect(localNodeRect, bodyColor);
+            
             // Border
             Handles.BeginGUI();
-            Handles.color = NodeBorderColor;
-            Handles.DrawAAPolyLine(2f, new Vector3[]
+            var borderColor = node.IsInitialState ? InitialStateBorderColor : NodeBorderColor;
+            var borderWidth = node.IsInitialState ? 3f : 2f;
+            Handles.color = borderColor;
+            Handles.DrawAAPolyLine(borderWidth, new Vector3[]
             {
-                new Vector3(rect.xMin, rect.yMin), new Vector3(rect.xMax, rect.yMin),
-                new Vector3(rect.xMax, rect.yMax), new Vector3(rect.xMin, rect.yMax), new Vector3(rect.xMin, rect.yMin)
+                new(localNodeRect.xMin, localNodeRect.yMin),
+                new(localNodeRect.xMax, localNodeRect.yMin),
+                new(localNodeRect.xMax, localNodeRect.yMax),
+                new(localNodeRect.xMin, localNodeRect.yMax),
+                new(localNodeRect.xMin, localNodeRect.yMin)
             });
             Handles.color = Color.white;
             Handles.EndGUI();
-
-            var titleRect = new Rect(rect.x + 8, rect.y + 8, rect.width - 16, 18);
+            
+            float currentY = 8;
+            
+            // Title field
+            var titleRect = new Rect(8, currentY, BaseNodeSize.x - 16, 18);
             node.title = EditorGUI.TextField(titleRect, node.title);
-
+            currentY += 20;
+            
+            // Type dropdown
+            GUI.BeginGroup(new Rect(8, currentY, BaseNodeSize.x - 16, 18));
+            EditorGUI.BeginChangeCheck();
+            var types = TypeDropdown.GetInheritedTypes(typeof(StateDefinition));
+            var typeNames = types.Select(t => t.Name).ToArray();
+            var currentType = node.GetStateType();
+            var currentIndex = currentType != null ? types.IndexOf(currentType) : -1;
+            if (currentIndex < 0) currentIndex = 0;
+            var newIndex = EditorGUI.Popup(new Rect(0, 0, BaseNodeSize.x - 16, 18), currentIndex, typeNames);
+            if (EditorGUI.EndChangeCheck() && newIndex >= 0 && newIndex < types.Count)
+            {
+                var selectedType = types[newIndex];
+                node.SetStateType(selectedType);
+                if (node.state == null || node.state.GetType() != selectedType)
+                {
+                    node.state = (StateDefinition)Activator.CreateInstance(selectedType);
+                    MarkDirty();
+                }
+            }
+            GUI.EndGroup();
+            currentY += 20;
+            
+            // Expand/collapse button
+            var expandRect = new Rect(8, currentY, BaseNodeSize.x - 16, 16);
+            var isExpanded = IsNodeExpanded(node);
+            var hasState = node.state != null;
+            
+            if (hasState)
+            {
+                var newExpanded = EditorGUI.Foldout(expandRect, isExpanded, "Variables", true);
+                if (newExpanded != isExpanded)
+                {
+                    SetNodeExpanded(node, newExpanded);
+                }
+                currentY += 18;
+                
+                // Draw state variables if expanded
+                if (isExpanded)
+                {
+                    DrawStateVariablesInNode(node, localNodeRect, ref currentY);
+                }
+            }
+            
+            // Restore original matrix
+            GUI.matrix = originalMatrix;
             // Handle mouse on node
             var e = Event.current;
             if (e.type == EventType.MouseDown && e.button == 0)
             {
                 // Complete a pending connection by clicking a target node
-                if (_connectingFrom != null && rect.Contains(e.mousePosition))
+                if (_connectingFrom != null && screenRect.Contains(e.mousePosition))
                 {
                     TryCreateTransition(_connectingFrom, node);
                     _connectingFrom = null;
@@ -225,17 +352,17 @@ namespace VolumeBox.Gearbox.Editor
                     return;
                 }
 
-                if (rect.Contains(e.mousePosition))
+                if (screenRect.Contains(e.mousePosition))
                 {
                     _selectedNode = node;
-                    _draggingNodeOffset = node.position - (e.mousePosition - _panOffset);
+                    _draggingNodeOffset = node.position - ((e.mousePosition - _panOffset) / _zoom);
                     GUI.FocusControl(null);
                 }
             }
 
             if (e.type == EventType.MouseDrag && e.button == 0 && _selectedNode == node)
             {
-                node.position = e.mousePosition - _panOffset + _draggingNodeOffset;
+                node.position = ((e.mousePosition - _panOffset) / _zoom) + _draggingNodeOffset;
                 MarkDirty();
                 GUI.changed = true;
                 e.Use();
@@ -253,9 +380,9 @@ namespace VolumeBox.Gearbox.Editor
 
             foreach (var info in _transitionRenderInfos)
             {
-                bool isSelected = info.Transition == _selectedTransition;
-                float width = isSelected ? SelectedEdgeWidth : BaseEdgeWidth;
-                Color color = isSelected ? Color.yellow : EdgeColor;
+                var isSelected = info.Transition == _selectedTransition;
+                var width = isSelected ? SelectedEdgeWidth : BaseEdgeWidth;
+                var color = isSelected ? Color.yellow : EdgeColor;
                 Handles.color = color;
 
                 Handles.DrawAAPolyLine(width, info.Points);
@@ -265,8 +392,8 @@ namespace VolumeBox.Gearbox.Editor
 
             if (_connectingFrom != null)
             {
-                Rect fromRect = GetNodeRect(_connectingFrom);
-                Vector2 fromCenter = fromRect.center;
+                var fromRect = GetNodeRect(_connectingFrom);
+                var fromCenter = fromRect.center;
                 Handles.color = EdgeColor;
                 Handles.DrawAAPolyLine(BaseEdgeWidth, new Vector3[] { fromCenter, Event.current.mousePosition });
             }
@@ -275,23 +402,23 @@ namespace VolumeBox.Gearbox.Editor
             Handles.EndGUI();
         }
 
-        private bool TryGetLineRectIntersection(Vector2 a, Vector2 b, Rect rect, out Vector2 intersection)
+        private static bool TryGetLineRectIntersection(Vector2 a, Vector2 b, Rect rect, out Vector2 intersection)
         {
             // Intersect with each side of the rectangle and take the nearest to 'b' along the line
-            bool found = false;
-            float bestT = float.PositiveInfinity;
-            Vector2 bestPoint = Vector2.zero;
+            var found = false;
+            var bestT = float.PositiveInfinity;
+            var bestPoint = Vector2.zero;
 
-            Vector2 dir = b - a;
+            var dir = b - a;
 
             // Avoid division by zero by checking components
             if (Mathf.Abs(dir.x) > 1e-5f)
             {
                 // Left edge x = rect.xMin
-                float t = (rect.xMin - a.x) / dir.x;
-                if (t >= 0f && t <= 1f)
+                var t = (rect.xMin - a.x) / dir.x;
+                if (t is >= 0f and <= 1f)
                 {
-                    float y = a.y + t * dir.y;
+                    var y = a.y + t * dir.y;
                     if (y >= rect.yMin && y <= rect.yMax)
                     {
                         found = true;
@@ -300,9 +427,9 @@ namespace VolumeBox.Gearbox.Editor
                 }
                 // Right edge x = rect.xMax
                 t = (rect.xMax - a.x) / dir.x;
-                if (t >= 0f && t <= 1f)
+                if (t is >= 0f and <= 1f)
                 {
-                    float y = a.y + t * dir.y;
+                    var y = a.y + t * dir.y;
                     if (y >= rect.yMin && y <= rect.yMax)
                     {
                         found = true;
@@ -314,10 +441,10 @@ namespace VolumeBox.Gearbox.Editor
             if (Mathf.Abs(dir.y) > 1e-5f)
             {
                 // Bottom edge y = rect.yMin
-                float t = (rect.yMin - a.y) / dir.y;
-                if (t >= 0f && t <= 1f)
+                var t = (rect.yMin - a.y) / dir.y;
+                if (t is >= 0f and <= 1f)
                 {
-                    float x = a.x + t * dir.x;
+                    var x = a.x + t * dir.x;
                     if (x >= rect.xMin && x <= rect.xMax)
                     {
                         found = true;
@@ -326,13 +453,16 @@ namespace VolumeBox.Gearbox.Editor
                 }
                 // Top edge y = rect.yMax
                 t = (rect.yMax - a.y) / dir.y;
-                if (t >= 0f && t <= 1f)
+                if (t is >= 0f and <= 1f)
                 {
-                    float x = a.x + t * dir.x;
+                    var x = a.x + t * dir.x;
                     if (x >= rect.xMin && x <= rect.xMax)
                     {
                         found = true;
-                        if (t < bestT) { bestT = t; bestPoint = new Vector2(x, rect.yMax); }
+                        if (t < bestT) 
+                        {
+                            bestPoint = new Vector2(x, rect.yMax); 
+                        }
                     }
                 }
             }
@@ -341,18 +471,18 @@ namespace VolumeBox.Gearbox.Editor
             return found;
         }
 
-        private void DrawArrow(Vector2 tip, Vector2 direction)
+        private static void DrawArrow(Vector2 tip, Vector2 direction)
         {
             if (direction.sqrMagnitude < 1e-6f)
             {
                 return;
             }
 
-            Vector2 dir = direction.normalized;
-            Vector2 back = tip - dir * ArrowSize;
-            Vector2 perp = new Vector2(-dir.y, dir.x);
-            Vector2 wingA = back + perp * (ArrowSize * 0.5f);
-            Vector2 wingB = back - perp * (ArrowSize * 0.5f);
+            var dir = direction.normalized;
+            var back = tip - dir * ArrowSize;
+            var perp = new Vector2(-dir.y, dir.x);
+            var wingA = back + perp * (ArrowSize * 0.5f);
+            var wingB = back - perp * (ArrowSize * 0.5f);
 
             Handles.DrawLine(tip, wingA);
             Handles.DrawLine(tip, wingB);
@@ -360,85 +490,112 @@ namespace VolumeBox.Gearbox.Editor
 
         private void ProcessEvents(Event e)
         {
-            if (e.type == EventType.MouseDown)
+            switch (e.type)
             {
-                if (e.button == 0)
+                case EventType.MouseDown:
                 {
-                    if (TryGetTransitionAtPosition(e.mousePosition, EdgeSelectionRadius, out var transition))
+                    if (e.button == 0)
                     {
-                        _selectedTransition = transition;
-                        GUI.changed = true;
-                        e.Use();
-                        return;
-                    }
-                    else
-                    {
+                        if (TryGetTransitionAtPosition(e.mousePosition, EdgeSelectionRadius, out var transition))
+                        {
+                            _selectedTransition = transition;
+                            GUI.changed = true;
+                            e.Use();
+                            return;
+                        }
+
                         _selectedTransition = null;
                     }
-                }
 
-                if (e.button == 2 || (e.button == 0 && e.alt))
-                {
-                    _isPanning = true;
-                    GUI.FocusControl(null);
-                }
-                else if (e.button == 1)
-                {
-                    if (TryGetTransitionAtPosition(e.mousePosition, EdgeSelectionRadius, out var transition))
+                    switch (e.button)
                     {
-                        _selectedTransition = transition;
-                        ShowTransitionContextMenu(transition);
-                        e.Use();
-                        return;
+                        case 0 when e.alt:
+                            _isPanning = true;
+                            GUI.FocusControl(null);
+                            break;
+                        case 2: // Middle mouse button for panning
+                            _isPanning = true;
+                            GUI.FocusControl(null);
+                            break;
+                        case 1 when TryGetTransitionAtPosition(e.mousePosition, EdgeSelectionRadius, out var transition):
+                            _selectedTransition = transition;
+                            ShowTransitionContextMenu(transition);
+                            e.Use();
+                            return;
+                        case 1:
+                            ShowContextMenu(e.mousePosition);
+                            break;
                     }
 
-                    ShowContextMenu(e.mousePosition);
+                    break;
                 }
-            }
-            else if (e.type == EventType.MouseDrag)
-            {
-                if (_isPanning)
-                {
+                case EventType.MouseDrag when _isPanning:
                     _panOffset += e.delta;
                     GUI.changed = true;
-                }
-                else if (_connectingFrom != null)
+                    break;
+                case EventType.MouseDrag:
                 {
-                    // While drawing a connection, update every drag
-                    Repaint();
+                    if (_connectingFrom != null)
+                    {
+                        // While drawing a connection, update every drag
+                        Repaint();
+                    }
+
+                    break;
                 }
-            }
-            else if (e.type == EventType.MouseUp)
-            {
-                if (e.button == 2 || (e.button == 0 && e.alt))
+                case EventType.MouseUp:
                 {
-                    _isPanning = false;
+                    if (e.button == 2 || (e.button == 0 && e.alt))
+                    {
+                        _isPanning = false;
+                    }
+
+                    break;
                 }
-            }
-            else if (e.type == EventType.MouseMove)
-            {
-                // Ensure the preview line follows the cursor
-                if (_connectingFrom != null)
+                case EventType.MouseMove:
                 {
-                    Repaint();
+                    // Ensure the preview line follows the cursor
+                    if (_connectingFrom != null)
+                    {
+                        Repaint();
+                    }
+
+                    break;
                 }
-            }
-            else if (e.type == EventType.KeyDown)
-            {
-                if (_selectedTransition != null && (e.keyCode == KeyCode.Delete || e.keyCode == KeyCode.Backspace))
+                case EventType.ScrollWheel:
                 {
-                    _stateMachine.Transitions.Remove(_selectedTransition);
-                    _selectedTransition = null;
-                    MarkDirty();
-                    GUI.changed = true;
+                    var oldZoom = _zoom;
+                    _zoom = Mathf.Clamp(_zoom - e.delta.y * ZoomStep * 0.1f, MinZoom, MaxZoom);
+                    
+                    // Adjust pan offset to zoom towards mouse position
+                    if (Mathf.Abs(oldZoom - _zoom) > 0.001f)
+                    {
+                        var mouseWorldPos = (e.mousePosition - _panOffset) / oldZoom;
+                        _panOffset = e.mousePosition - mouseWorldPos * _zoom;
+                        GUI.changed = true;
+                    }
                     e.Use();
+                    break;
+                }
+                case EventType.KeyDown:
+                {
+                    if (_selectedTransition != null && (e.keyCode == KeyCode.Delete || e.keyCode == KeyCode.Backspace))
+                    {
+                        _stateMachine.Transitions.Remove(_selectedTransition);
+                        _selectedTransition = null;
+                        MarkDirty();
+                        GUI.changed = true;
+                        e.Use();
+                    }
+
+                    break;
                 }
             }
         }
 
         private void ShowContextMenu(Vector2 mousePosition)
         {
-            GenericMenu menu = new GenericMenu();
+            var menu = new GenericMenu();
             var hovered = GetNodeAtPosition(mousePosition);
 
             if (hovered == null)
@@ -455,6 +612,20 @@ namespace VolumeBox.Gearbox.Editor
                 {
                     _connectingFrom = node;
                 });
+                
+                // Add "Make as initial" option
+                if (!node.IsInitialState)
+                {
+                    menu.AddItem(new GUIContent("Make as initial"), false, () =>
+                    {
+                        SetAsInitialState(node);
+                    });
+                }
+                else
+                {
+                    menu.AddDisabledItem(new GUIContent("Make as initial"));
+                }
+                
                 menu.AddSeparator("");
                 menu.AddItem(new GUIContent("Delete State"), false, () =>
                 {
@@ -471,7 +642,7 @@ namespace VolumeBox.Gearbox.Editor
 
         private void ShowTransitionContextMenu(StateTransition transition)
         {
-            GenericMenu menu = new GenericMenu();
+            var menu = new GenericMenu();
             menu.AddItem(new GUIContent("Delete Transition"), false, () =>
             {
                 _stateMachine.Transitions.Remove(transition);
@@ -487,7 +658,7 @@ namespace VolumeBox.Gearbox.Editor
 
         private StateNode GetNodeAtPosition(Vector2 mousePosition)
         {
-            for (int i = _stateMachine.Nodes.Count - 1; i >= 0; i--)
+            for (var i = _stateMachine.Nodes.Count - 1; i >= 0; i--)
             {
                 var node = _stateMachine.Nodes[i];
                 if (GetNodeRect(node).Contains(mousePosition))
@@ -506,20 +677,53 @@ namespace VolumeBox.Gearbox.Editor
                 title = "State",
                 position = graphPosition
             };
+            
+            // If this is the first node, make it the initial state
+            if (_stateMachine.Nodes.Count == 0)
+            {
+                node.IsInitialState = true;
+            }
+            
             _stateMachine.Nodes.Add(node);
             MarkDirty();
         }
 
         private void DeleteNode(StateNode node)
         {
+            // If deleting the initial state, set another node as initial if available
+            if (node.IsInitialState && _stateMachine.Nodes.Count > 1)
+            {
+                var otherNode = _stateMachine.Nodes.Find(n => n != node);
+                if (otherNode != null)
+                {
+                    otherNode.IsInitialState = true;
+                }
+            }
+            
             _stateMachine.Transitions.RemoveAll(t => t.fromId == node.id || t.toId == node.id);
             _stateMachine.Nodes.Remove(node);
             MarkDirty();
         }
 
+        private void SetAsInitialState(StateNode node)
+        {
+            // Clear initial state from all other nodes
+            foreach (var otherNode in _stateMachine.Nodes)
+            {
+                if (otherNode != node)
+                {
+                    otherNode.IsInitialState = false;
+                }
+            }
+            
+            // Set this node as initial state
+            node.IsInitialState = true;
+            MarkDirty();
+        }
+
         private void TryCreateTransition(StateNode from, StateNode to)
         {
-            bool exists = _stateMachine.Transitions.Exists(t => t.fromId == from.id && t.toId == to.id);
+            var exists = _stateMachine.Transitions.Exists(t => t.fromId == from.id && t.toId == to.id);
             if (exists) { return; }
 
             _stateMachine.Transitions.Add(new StateTransition
@@ -533,32 +737,154 @@ namespace VolumeBox.Gearbox.Editor
         private void MarkDirty()
         {
             EditorUtility.SetDirty(_stateMachine);
+            if (_serializedStateMachine != null)
+            {
+                _serializedStateMachine.Update();
+            }
+        }
+        
+        private void DrawStateVariablesInNode(StateNode node, Rect nodeRect, ref float currentY)
+        {
+            if (node.state == null) return;
+            
+            // Update serialized object
+            if (_serializedStateMachine != null)
+            {
+                _serializedStateMachine.Update();
+            }
+            
+            // Find the node property
+            SerializedProperty nodeProperty = null;
+            SerializedProperty stateProperty = null;
+            
+            if (_nodesProperty != null)
+            {
+                for (int i = 0; i < _nodesProperty.arraySize; i++)
+                {
+                    var prop = _nodesProperty.GetArrayElementAtIndex(i);
+                    var idProp = prop.FindPropertyRelative("id");
+                    if (idProp != null && idProp.stringValue == node.id)
+                    {
+                        nodeProperty = prop;
+                        stateProperty = prop.FindPropertyRelative("state");
+                        break;
+                    }
+                }
+            }
+            
+            var stateType = node.state.GetType();
+            var fields = stateType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            
+            foreach (var field in fields)
+            {
+                if (field.GetCustomAttributes(typeof(StateVariableAttribute), true).Length == 0)
+                {
+                    continue;
+                }
+                
+                var fieldRect = new Rect(nodeRect.x + 8, currentY, nodeRect.width - 16, FieldHeight);
+                
+                // Try to use SerializedProperty first
+                if (stateProperty != null)
+                {
+                    var fieldProperty = stateProperty.FindPropertyRelative(field.Name);
+                    if (fieldProperty != null)
+                    {
+                        EditorGUI.PropertyField(fieldRect, fieldProperty, new GUIContent(ObjectNames.NicifyVariableName(field.Name)), false);
+                        currentY += FieldHeight + FieldSpacing;
+                        continue;
+                    }
+                }
+                
+                // Fallback to reflection-based editing
+                var value = field.GetValue(node.state);
+                var fieldType = field.FieldType;
+                EditorGUI.BeginChangeCheck();
+                object newValue = null;
+                
+                if (fieldType == typeof(int))
+                {
+                    newValue = EditorGUI.IntField(fieldRect, ObjectNames.NicifyVariableName(field.Name), (int)value);
+                }
+                else if (fieldType == typeof(float))
+                {
+                    newValue = EditorGUI.FloatField(fieldRect, ObjectNames.NicifyVariableName(field.Name), (float)value);
+                }
+                else if (fieldType == typeof(string))
+                {
+                    newValue = EditorGUI.TextField(fieldRect, ObjectNames.NicifyVariableName(field.Name), (string)value);
+                }
+                else if (fieldType == typeof(bool))
+                {
+                    newValue = EditorGUI.Toggle(fieldRect, ObjectNames.NicifyVariableName(field.Name), (bool)value);
+                }
+                else if (typeof(UnityEngine.Object).IsAssignableFrom(fieldType))
+                {
+                    newValue = EditorGUI.ObjectField(fieldRect, ObjectNames.NicifyVariableName(field.Name), value as UnityEngine.Object, fieldType, true);
+                }
+                else if (fieldType == typeof(Vector2))
+                {
+                    newValue = EditorGUI.Vector2Field(fieldRect, ObjectNames.NicifyVariableName(field.Name), (Vector2)value);
+                    currentY += FieldHeight; // Vector2 field takes more space
+                }
+                else if (fieldType == typeof(Vector3))
+                {
+                    newValue = EditorGUI.Vector3Field(fieldRect, ObjectNames.NicifyVariableName(field.Name), (Vector3)value);
+                    currentY += FieldHeight; // Vector3 field takes more space
+                }
+                else if (fieldType == typeof(Color))
+                {
+                    newValue = EditorGUI.ColorField(fieldRect, ObjectNames.NicifyVariableName(field.Name), (Color)value);
+                }
+                else
+                {
+                    // For other types, just display as read-only
+                    EditorGUI.BeginDisabledGroup(true);
+                    EditorGUI.LabelField(fieldRect, ObjectNames.NicifyVariableName(field.Name), value != null ? value.ToString() : "null");
+                    EditorGUI.EndDisabledGroup();
+                }
+                
+                if (EditorGUI.EndChangeCheck() && newValue != null)
+                {
+                    field.SetValue(node.state, newValue);
+                    MarkDirty();
+                }
+                
+                currentY += FieldHeight + FieldSpacing;
+            }
+            
+            // Apply changes to serialized object
+            if (_serializedStateMachine != null && _serializedStateMachine.hasModifiedProperties)
+            {
+                _serializedStateMachine.ApplyModifiedProperties();
+            }
         }
 
         private bool TryGetTransitionAtPosition(Vector2 mousePosition, float maxDistance, out StateTransition transition)
         {
             transition = null;
-            float bestDistance = maxDistance;
+            var bestDistance = maxDistance;
 
             foreach (var info in _transitionRenderInfos)
             {
-                float distance = DistanceToPolyline(mousePosition, info.Points);
-                if (distance < bestDistance)
-                {
-                    bestDistance = distance;
-                    transition = info.Transition;
-                }
+                var distance = DistanceToPolyline(mousePosition, info.Points);
+                
+                if (!(distance < bestDistance)) continue;
+                
+                bestDistance = distance;
+                transition = info.Transition;
             }
 
             return transition != null;
         }
 
-        private float DistanceToPolyline(Vector2 point, Vector3[] polyline)
+        private static float DistanceToPolyline(Vector2 point, Vector3[] polyline)
         {
-            float min = float.PositiveInfinity;
-            for (int i = 0; i < polyline.Length - 1; i++)
+            var min = float.PositiveInfinity;
+            for (var i = 0; i < polyline.Length - 1; i++)
             {
-                float distance = DistancePointToSegment(point, polyline[i], polyline[i + 1]);
+                var distance = DistancePointToSegment(point, polyline[i], polyline[i + 1]);
+                
                 if (distance < min)
                 {
                     min = distance;
@@ -567,18 +893,19 @@ namespace VolumeBox.Gearbox.Editor
             return min;
         }
 
-        private float DistancePointToSegment(Vector2 point, Vector3 a, Vector3 b)
+        private static float DistancePointToSegment(Vector2 point, Vector3 a, Vector3 b)
         {
-            Vector2 segment = (Vector2)(b - a);
-            float lengthSq = segment.sqrMagnitude;
+            var segment = (Vector2)(b - a);
+            var lengthSq = segment.sqrMagnitude;
+            
             if (lengthSq <= Mathf.Epsilon)
             {
                 return Vector2.Distance(point, a);
             }
 
-            float t = Vector2.Dot(point - (Vector2)a, segment) / lengthSq;
+            var t = Vector2.Dot(point - (Vector2)a, segment) / lengthSq;
             t = Mathf.Clamp01(t);
-            Vector2 projection = (Vector2)a + segment * t;
+            var projection = (Vector2)a + segment * t;
             return Vector2.Distance(point, projection);
         }
     }

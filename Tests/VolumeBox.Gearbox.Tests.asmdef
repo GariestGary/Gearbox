@@ -2,7 +2,8 @@
     "name": "VolumeBox.Gearbox.Tests",
     "rootNamespace": "VolumeBox.Gearbox.Tests",
     "references": [
-        "GUID:41be746dfe29c2c4c82f6107618c6c60"
+        "GUID:41be746dfe29c2c4c82f6107618c6c60",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23"
     ],
     "includePlatforms": [
         "Editor"
