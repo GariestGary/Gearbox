@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using VolumeBox.Gearbox.Core;
@@ -11,148 +12,36 @@ namespace VolumeBox.Gearbox.Editor
     public class StateMachineInspector : UnityEditor.Editor
     {
         private readonly Dictionary<string, bool> _foldouts = new Dictionary<string, bool>();
-        private SerializedProperty _nodesProperty;
+        private SerializedProperty _statesProperty;
 
         private void OnEnable()
         {
-            _nodesProperty = serializedObject.FindProperty("nodes");
+            _statesProperty = serializedObject.FindProperty("states");
         }
 
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            
-            var sm = (StateMachine)target;
 
-            GUILayout.Space(4);
-            if (GUILayout.Button("Open State Machine Graph"))
-            {
-                StateMachineGraphWindow.Open(sm);
-            }
+            var sm = (StateMachine)target;
 
             GUILayout.Space(8);
             EditorGUILayout.LabelField("States", EditorStyles.boldLabel);
 
-            if (_nodesProperty != null)
+            // Add State button
+            if (GUILayout.Button("Add State"))
             {
-                for (int i = 0; i < _nodesProperty.arraySize; i++)
+                AddNewState();
+            }
+
+            EditorGUILayout.Space();
+
+            if (_statesProperty != null)
+            {
+                for (int i = 0; i < _statesProperty.arraySize; i++)
                 {
-                    var nodeProperty = _nodesProperty.GetArrayElementAtIndex(i);
-                    var nodeIdProperty = nodeProperty.FindPropertyRelative("id");
-                    var nodeTitleProperty = nodeProperty.FindPropertyRelative("title");
-                    var stateProperty = nodeProperty.FindPropertyRelative("state");
-                    
-                    if (nodeIdProperty == null) continue;
-                    
-                    var nodeId = nodeIdProperty.stringValue;
-                    if (!_foldouts.ContainsKey(nodeId)) { _foldouts[nodeId] = true; }
-
-                    EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                    var previousIndent = EditorGUI.indentLevel;
-                    EditorGUI.indentLevel = 1;
-                    GUILayout.BeginHorizontal();
-                    _foldouts[nodeId] = EditorGUILayout.Foldout(_foldouts[nodeId], 
-                        string.IsNullOrEmpty(nodeTitleProperty.stringValue) ? "<Unnamed State>" : nodeTitleProperty.stringValue, true);
-                    GUILayout.EndHorizontal();
-                    EditorGUI.indentLevel = previousIndent;
-
-                    if (_foldouts[nodeId])
-                    {
-                        EditorGUI.indentLevel++;
-                        
-                        // Draw state type info
-                        var stateTypeNameProperty = nodeProperty.FindPropertyRelative("stateTypeName");
-                        var hasStateType = stateTypeNameProperty != null && !string.IsNullOrEmpty(stateTypeNameProperty.stringValue);
-                        
-                        if (hasStateType)
-                        {
-                            var stateType = Type.GetType(stateTypeNameProperty.stringValue);
-                            EditorGUILayout.LabelField("Type", stateType != null ? stateType.Name : stateTypeNameProperty.stringValue);
-                        }
-                        
-                        // Draw state variables
-                        var node = sm.Nodes.Find(n => n.id == nodeId);
-                        StateDefinition stateInstance = null;
-                        
-                        // Check runtime object first (most reliable)
-                        if (node != null && node.state != null)
-                        {
-                            stateInstance = node.state;
-                        }
-                        // Then check SerializedProperty
-                        else if (stateProperty != null)
-                        {
-                            stateInstance = stateProperty.managedReferenceValue as StateDefinition;
-                        }
-                        
-                        // If we have a type name but no instance, create it
-                        if (hasStateType && stateInstance == null)
-                        {
-                            var stateType = Type.GetType(stateTypeNameProperty.stringValue);
-                            if (stateType != null)
-                            {
-                                try
-                                {
-                                    stateInstance = (StateDefinition)System.Activator.CreateInstance(stateType);
-                                    
-                                    // Set in both places
-                                    if (node != null)
-                                    {
-                                        node.state = stateInstance;
-                                        EditorUtility.SetDirty(sm);
-                                    }
-                                    if (stateProperty != null)
-                                    {
-                                        stateProperty.managedReferenceValue = stateInstance;
-                                        serializedObject.ApplyModifiedProperties();
-                                    }
-                                }
-                                catch (System.Exception ex)
-                                {
-                                    Debug.LogWarning($"Failed to create state instance: {ex.Message}");
-                                }
-                            }
-                        }
-                        
-                        // Draw the state
-                        if (stateInstance != null)
-                        {
-                            // Always try SerializedProperty first if available
-                            if (stateProperty != null)
-                            {
-                                var propValue = stateProperty.managedReferenceValue as StateDefinition;
-                                if (propValue != null)
-                                {
-                                    DrawStateVariables(stateProperty);
-                                }
-                                else
-                                {
-                                    // Property exists but value is null, draw directly and try to sync
-                                    DrawStateVariablesDirect(stateInstance, stateProperty);
-                                    // Try to sync it back
-                                    stateProperty.managedReferenceValue = stateInstance;
-                                    serializedObject.ApplyModifiedProperties();
-                                }
-                            }
-                            else
-                            {
-                                DrawStateVariablesDirect(stateInstance);
-                            }
-                        }
-                        else if (hasStateType)
-                        {
-                            EditorGUILayout.HelpBox("State type selected but instance not created. Re-select the state type in the graph window.", MessageType.Warning);
-                        }
-                        else
-                        {
-                            EditorGUILayout.HelpBox("No state assigned. Select a state type in the graph window.", MessageType.Info);
-                        }
-                        
-                        EditorGUI.indentLevel--;
-                    }
-
-                    EditorGUILayout.EndVertical();
-                }
+                    DrawStateElement(i);
+                } 
             }
 
             if (serializedObject.hasModifiedProperties)
@@ -161,83 +50,170 @@ namespace VolumeBox.Gearbox.Editor
             }
         }
 
-        private void DrawStateVariables(SerializedProperty stateProperty)
+        private void DrawStateElement(int index)
         {
-            if (stateProperty == null) return;
-            
-            // Try to get the managed reference value
-            var stateValue = stateProperty.managedReferenceValue;
-            if (stateValue == null) return;
-            
-            DrawStateVariablesDirect(stateValue as StateDefinition, stateProperty);
-        }
-        
-        private void DrawStateVariablesDirect(StateDefinition state, SerializedProperty stateProperty = null)
-        {
-            if (state == null) return;
-            
-            var stateType = state.GetType();
-            var fields = stateType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            var stateProperty = _statesProperty.GetArrayElementAtIndex(index);
+            var nameProperty = stateProperty.FindPropertyRelative("name");
+            var stateTypeNameProperty = stateProperty.FindPropertyRelative("stateTypeName");
+            var transitionsProperty = stateProperty.FindPropertyRelative("transitionNames");
 
+            var foldoutId = $"state_{index}";
+            if (!_foldouts.ContainsKey(foldoutId)) { _foldouts[foldoutId] = true; }
+
+            var stateName = string.IsNullOrEmpty(nameProperty.stringValue) ? $"State {index + 1}" : nameProperty.stringValue;
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUI.indentLevel++;
+            
+            _foldouts[foldoutId] = EditorGUILayout.Foldout(_foldouts[foldoutId], stateName, true);
+
+            if (GUILayout.Button("Remove", GUILayout.Width(60)))
+            {
+                RemoveState(index);
+                return;
+            }
+            
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.Space();
+
+            if (_foldouts[foldoutId])
+            {
+                // Name field
+                EditorGUILayout.PropertyField(nameProperty, new GUIContent("Name"));
+
+                // Type dropdown
+                DrawStateTypeDropdown(stateTypeNameProperty);
+
+                // State instance properties
+                DrawStateInstanceProperties(stateProperty);
+
+                // Transitions
+                EditorGUILayout.LabelField("Transitions", EditorStyles.boldLabel);
+                DrawTransitionsList(transitionsProperty);
+
+                EditorGUI.indentLevel--;
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawStateTypeDropdown(SerializedProperty stateTypeNameProperty)
+        {
+            var types = GetStateDefinitionTypes();
+            var typeNames = types.Select(t => t.Name).ToArray();
+            var currentTypeName = stateTypeNameProperty.stringValue;
+            var currentIndex = string.IsNullOrEmpty(currentTypeName) ? -1 :
+                Array.IndexOf(typeNames, Type.GetType(currentTypeName)?.Name ?? "");
+
+            EditorGUI.BeginChangeCheck();
+            var newIndex = EditorGUILayout.Popup("Type", currentIndex, typeNames);
+            if (EditorGUI.EndChangeCheck() && newIndex >= 0 && newIndex < types.Length)
+            {
+                stateTypeNameProperty.stringValue = types[newIndex].AssemblyQualifiedName;
+                serializedObject.ApplyModifiedProperties();
+            }
+        }
+
+        private void DrawStateInstanceProperties(SerializedProperty stateProperty)
+        {
+            var stateTypeName = stateProperty.FindPropertyRelative("stateTypeName").stringValue;
+            if (string.IsNullOrEmpty(stateTypeName)) return;
+
+            var stateType = Type.GetType(stateTypeName);
+            if (stateType == null) return;
+
+            // Create managed reference if needed
+            var managedRef = stateProperty.managedReferenceValue;
+            if (managedRef == null || managedRef.GetType() != stateType)
+            {
+                try
+                {
+                    managedRef = (StateDefinition)Activator.CreateInstance(stateType);
+                    stateProperty.managedReferenceValue = managedRef;
+                    serializedObject.ApplyModifiedProperties();
+                }
+                catch (Exception ex)
+                {
+                    EditorGUILayout.HelpBox($"Failed to create state instance: {ex.Message}", MessageType.Error);
+                    return;
+                }
+            }
+
+            // Draw all serializable fields
+            var fields = stateType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             foreach (var field in fields)
             {
-                if (field.GetCustomAttributes(typeof(StateVariableAttribute), true).Length == 0) 
-                { 
-                    continue; 
-                }
-
-                // Try to use SerializedProperty if available
-                if (stateProperty != null)
+                if (field.IsPublic || field.GetCustomAttributes(typeof(SerializeField), true).Length > 0)
                 {
                     var fieldProperty = stateProperty.FindPropertyRelative(field.Name);
                     if (fieldProperty != null)
                     {
                         EditorGUILayout.PropertyField(fieldProperty, new GUIContent(ObjectNames.NicifyVariableName(field.Name)), true);
-                        continue;
                     }
                 }
-                
-                // Fallback: use reflection to get/set values
-                var value = field.GetValue(state);
-                var fieldType = field.FieldType;
-                
-                EditorGUI.BeginChangeCheck();
-                object newValue = null;
-                
-                if (fieldType == typeof(int))
-                {
-                    newValue = EditorGUILayout.IntField(ObjectNames.NicifyVariableName(field.Name), (int)value);
-                }
-                else if (fieldType == typeof(float))
-                {
-                    newValue = EditorGUILayout.FloatField(ObjectNames.NicifyVariableName(field.Name), (float)value);
-                }
-                else if (fieldType == typeof(string))
-                {
-                    newValue = EditorGUILayout.TextField(ObjectNames.NicifyVariableName(field.Name), (string)value);
-                }
-                else if (fieldType == typeof(bool))
-                {
-                    newValue = EditorGUILayout.Toggle(ObjectNames.NicifyVariableName(field.Name), (bool)value);
-                }
-                else if (typeof(UnityEngine.Object).IsAssignableFrom(fieldType))
-                {
-                    newValue = EditorGUILayout.ObjectField(ObjectNames.NicifyVariableName(field.Name), value as UnityEngine.Object, fieldType, true);
-                }
-                else
-                {
-                    // For other types, just display as read-only
-                    EditorGUI.BeginDisabledGroup(true);
-                    EditorGUILayout.LabelField(ObjectNames.NicifyVariableName(field.Name), value != null ? value.ToString() : "null");
-                    EditorGUI.EndDisabledGroup();
-                }
-                
-                if (EditorGUI.EndChangeCheck() && newValue != null)
-                {
-                    field.SetValue(state, newValue);
-                    EditorUtility.SetDirty(target);
-                }
             }
+        }
+
+        private void DrawTransitionsList(SerializedProperty transitionsProperty)
+        {
+            var sm = (StateMachine)target;
+            var stateNames = sm.States.Select(s => string.IsNullOrEmpty(s.name) ? "Unnamed" : s.name).ToArray();
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.LabelField("Available States", EditorStyles.miniBoldLabel);
+
+            for (int i = 0; i < transitionsProperty.arraySize; i++)
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField($"Transition {i + 1}", GUILayout.Width(80));
+
+                var transitionProperty = transitionsProperty.GetArrayElementAtIndex(i);
+                var currentValue = transitionProperty.stringValue;
+                var currentIndex = Array.IndexOf(stateNames, currentValue);
+
+                EditorGUI.BeginChangeCheck();
+                var newIndex = EditorGUILayout.Popup(currentIndex, stateNames);
+                if (EditorGUI.EndChangeCheck() && newIndex >= 0 && newIndex < stateNames.Length)
+                {
+                    transitionProperty.stringValue = stateNames[newIndex];
+                }
+
+                if (GUILayout.Button("X", GUILayout.Width(20)))
+                {
+                    transitionsProperty.DeleteArrayElementAtIndex(i);
+                    break; // Exit loop to avoid index issues
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (GUILayout.Button("Add Transition"))
+            {
+                transitionsProperty.InsertArrayElementAtIndex(transitionsProperty.arraySize);
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void AddNewState()
+        {
+            _statesProperty.InsertArrayElementAtIndex(_statesProperty.arraySize);
+            var newElement = _statesProperty.GetArrayElementAtIndex(_statesProperty.arraySize - 1);
+            newElement.FindPropertyRelative("name").stringValue = $"State {_statesProperty.arraySize}";
+            newElement.FindPropertyRelative("stateTypeName").stringValue = "";
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        private void RemoveState(int index)
+        {
+            _statesProperty.DeleteArrayElementAtIndex(index);
+            serializedObject.ApplyModifiedProperties();
+        }
+
+        private Type[] GetStateDefinitionTypes()
+        {
+            return GearboxTypeCache.GetStateDefinitionTypes();
         }
     }
 }

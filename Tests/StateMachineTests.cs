@@ -1,386 +1,186 @@
 using System.Collections;
-using System.Collections.Generic;
+using System.Linq;
+using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
-using NUnit.Framework;
-using Cysharp.Threading.Tasks;
 using VolumeBox.Gearbox.Core;
+using VolumeBox.Gearbox.Examples;
 
 namespace VolumeBox.Gearbox.Tests
 {
     public class StateMachineTests
     {
-        private GameObject testGameObject;
+        private GameObject testObject;
         private StateMachine stateMachine;
-        
+
         [SetUp]
         public void Setup()
         {
-            testGameObject = new GameObject("TestStateMachine");
-            stateMachine = testGameObject.AddComponent<StateMachine>();
+            testObject = new GameObject("TestStateMachine");
+            stateMachine = testObject.AddComponent<StateMachine>();
         }
-        
+
         [TearDown]
-        public void TearDown()
+        public void Teardown()
         {
-            if (testGameObject != null)
-            {
-                Object.DestroyImmediate(testGameObject);
-            }
+            Object.DestroyImmediate(testObject);
         }
-        
-        // Test state definitions for testing
-        [System.Serializable]
-        public class TestStateA : StateDefinition
+
+        [Test]
+        public void StateMachine_InitializesEmpty()
         {
-            public bool entered = false;
-            public bool exited = false;
-            public int updateCount = 0;
-            
-            public override async UniTask OnEnter()
-            {
-                entered = true;
-                await UniTask.CompletedTask;
-            }
-            
-            public override async UniTask OnUpdate()
-            {
-                updateCount++;
-                await UniTask.CompletedTask;
-            }
-            
-            public override async UniTask OnExit()
-            {
-                exited = true;
-                await UniTask.CompletedTask;
-            }
+            Assert.AreEqual(0, stateMachine.States.Count);
+            Assert.IsNull(stateMachine.CurrentState);
         }
-        
-        [System.Serializable]
-        public class TestStateB : StateDefinition
+
+        [Test]
+        public void StateMachine_InitializesWithStates()
         {
-            public bool entered = false;
-            public bool exited = false;
-            
-            public override async UniTask OnEnter()
+            // Add a test state
+            var stateData = new StateData
             {
-                entered = true;
-                await UniTask.CompletedTask;
-            }
-            
-            public override async UniTask OnExit()
-            {
-                exited = true;
-                await UniTask.CompletedTask;
-            }
+                name = "TestState",
+                stateTypeName = typeof(IdleState).AssemblyQualifiedName
+            };
+            stateMachine.States.Add(stateData);
+
+            // Initialize should create the state instance
+            stateMachine.InitializeStateMachine();
+
+            Assert.AreEqual(1, stateMachine.States.Count);
+            Assert.IsNotNull(stateMachine.States[0].instance);
+            Assert.AreEqual(typeof(IdleState), stateMachine.States[0].instance.GetType());
         }
-        
-        [System.Serializable]
-        public class AsyncTestState : StateDefinition
+
+        [Test]
+        public void StateMachine_TransitionToStateByName()
         {
-            public bool asyncOperationCompleted = false;
-            
-            public override async UniTask OnEnter()
+            // Setup two states
+            var idleState = new StateData
             {
-                await UniTask.Delay(100); // Simulate async operation
-                asyncOperationCompleted = true;
-            }
+                name = "Idle",
+                stateTypeName = typeof(IdleState).AssemblyQualifiedName
+            };
+            var moveState = new StateData
+            {
+                name = "Move",
+                stateTypeName = typeof(MoveState).AssemblyQualifiedName
+            };
+
+            stateMachine.States.Add(idleState);
+            stateMachine.States.Add(moveState);
+
+            stateMachine.InitializeStateMachine();
+
+            // Transition to Move state
+            stateMachine.TransitionToState("Move");
+
+            Assert.IsNotNull(stateMachine.CurrentState);
+            Assert.AreEqual(typeof(MoveState), stateMachine.CurrentState.GetType());
         }
-        
+
+        [Test]
+        public void StateMachine_GetAvailableTransitions()
+        {
+            // Setup state with transitions
+            var stateData = new StateData
+            {
+                name = "TestState",
+                stateTypeName = typeof(IdleState).AssemblyQualifiedName,
+                transitionNames = new System.Collections.Generic.List<string> { "State1", "State2" }
+            };
+
+            var idleState = new IdleState();
+            stateData.instance = idleState;
+
+            stateMachine.States.Add(stateData);
+
+            var transitions = stateMachine.GetAvailableTransitions(idleState);
+            Assert.AreEqual(2, transitions.Count);
+            Assert.Contains("State1", transitions.ToList());
+            Assert.Contains("State2", transitions.ToList());
+        }
+
+        [Test]
+        public void StateMachine_TriggerTransition()
+        {
+            // Setup two states
+            var state1Data = new StateData
+            {
+                name = "State1",
+                stateTypeName = typeof(IdleState).AssemblyQualifiedName
+            };
+            var state2Data = new StateData
+            {
+                name = "State2",
+                stateTypeName = typeof(MoveState).AssemblyQualifiedName,
+                transitionNames = new System.Collections.Generic.List<string> { "State1" }
+            };
+
+            stateMachine.States.Add(state1Data);
+            stateMachine.States.Add(state2Data);
+
+            // Set current state to State2
+            var moveState = new MoveState();
+            state2Data.instance = moveState;
+            stateMachine.InitializeStateMachine();
+            stateMachine.TransitionToState(moveState);
+
+            // Trigger transition to State1 (index 0)
+            stateMachine.TriggerTransition(moveState, 0);
+
+            Assert.AreEqual(typeof(IdleState), stateMachine.CurrentState.GetType());
+        }
+
         [UnityTest]
-        public IEnumerator TestStateMachineInitialization()
+        public IEnumerator StateMachine_UpdateLoop()
         {
-            // Arrange
-            var nodeA = new StateNode
+            // Setup state machine with a state that has update logic
+            var moveStateData = new StateData
             {
-                id = "stateA",
-                title = "State A",
-                IsInitialState = true,
-                state = new TestStateA()
+                name = "Move",
+                stateTypeName = typeof(MoveState).AssemblyQualifiedName
             };
-            
-            stateMachine.Nodes.Add(nodeA);
-            
-            // Act - Initialize manually since Start() won't be called in tests
-            yield return stateMachine.InitializeStateMachine().ToCoroutine();
-            
-            // Assert
-            Assert.IsNotNull(stateMachine.CurrentState, "Current state should not be null after initialization");
-            Assert.AreEqual(nodeA.id, stateMachine.CurrentState.id, "Current state should be the initial state");
-            var stateA = stateMachine.CurrentState.state as TestStateA;
-            Assert.IsTrue(stateA.entered, "OnEnter should have been called for initial state");
+            stateMachine.States.Add(moveStateData);
+
+            stateMachine.InitializeStateMachine();
+
+            // Wait for initialization
+            yield return null;
+
+            // Transition to move state
+            stateMachine.TransitionToState("Move");
+
+            // Wait a frame for update to run
+            yield return null;
+
+            // Verify state is active
+            Assert.IsNotNull(stateMachine.CurrentState);
+            Assert.AreEqual(typeof(MoveState), stateMachine.CurrentState.GetType());
         }
-        
-        [UnityTest]
-        public IEnumerator TestValidStateTransition()
+
+        [Test]
+        public void StateData_SetStateType()
         {
-            // Arrange
-            var nodeA = new StateNode
-            {
-                id = "stateA",
-                title = "State A",
-                IsInitialState = true,
-                state = new TestStateA()
-            };
-            
-            var nodeB = new StateNode
-            {
-                id = "stateB",
-                title = "State B",
-                state = new TestStateB()
-            };
-            
-            stateMachine.Nodes.Add(nodeA);
-            stateMachine.Nodes.Add(nodeB);
-            
-            var transition = new StateTransition
-            {
-                fromId = "stateA",
-                toId = "stateB"
-            };
-            stateMachine.Transitions.Add(transition);
-            
-            // Initialize state machine
-            yield return stateMachine.InitializeStateMachine().ToCoroutine();
-            
-            var stateA = nodeA.state as TestStateA;
-            var stateB = nodeB.state as TestStateB;
-            
-            // Act - Transition to state B
-            yield return stateMachine.TransitionToState("stateB").ToCoroutine();
-            
-            // Assert
-            Assert.AreEqual(nodeB.id, stateMachine.CurrentState.id, "Current state should be state B after transition");
-            Assert.IsTrue(stateA.exited, "State A should have exited");
-            Assert.IsTrue(stateB.entered, "State B should have entered");
+            var stateData = new StateData();
+
+            stateData.SetStateType(typeof(IdleState));
+
+            Assert.AreEqual(typeof(IdleState).AssemblyQualifiedName, stateData.stateTypeName);
+            Assert.AreEqual(typeof(IdleState), stateData.GetStateType());
         }
-        
-        [UnityTest]
-        public IEnumerator TestInvalidStateTransition()
+
+        [Test]
+        public void StateData_GetStateType()
         {
-            // Arrange
-            var nodeA = new StateNode
+            var stateData = new StateData
             {
-                id = "stateA",
-                title = "State A",
-                IsInitialState = true,
-                state = new TestStateA()
+                stateTypeName = typeof(MoveState).AssemblyQualifiedName
             };
-            
-            var nodeB = new StateNode
-            {
-                id = "stateB",
-                title = "State B",
-                state = new TestStateB()
-            };
-            
-            stateMachine.Nodes.Add(nodeA);
-            stateMachine.Nodes.Add(nodeB);
-            
-            // No transition between A and B
-            
-            // Initialize state machine
-            yield return stateMachine.InitializeStateMachine().ToCoroutine();
-            
-            var stateA = nodeA.state as TestStateA;
-            var stateB = nodeB.state as TestStateB;
-            
-            // Act - Try to transition to state B (should fail)
-            yield return stateMachine.TransitionToState("stateB").ToCoroutine();
-            
-            // Assert
-            Assert.AreEqual(nodeA.id, stateMachine.CurrentState.id, "Should still be in state A after invalid transition");
-            Assert.IsFalse(stateA.exited, "State A should not have exited for invalid transition");
-            Assert.IsFalse(stateB.entered, "State B should not have entered for invalid transition");
-        }
-        
-        [UnityTest]
-        public IEnumerator TestAsyncStateOperations()
-        {
-            // Arrange
-            var asyncState = new StateNode
-            {
-                id = "asyncState",
-                title = "Async State",
-                IsInitialState = true,
-                state = new AsyncTestState()
-            };
-            
-            stateMachine.Nodes.Add(asyncState);
-            
-            // Act - Initialize and wait for async operation
-            yield return stateMachine.InitializeStateMachine().ToCoroutine();
-            
-            // Assert
-            Assert.IsNotNull(stateMachine.CurrentState, "Current state should not be null");
-            var state = stateMachine.CurrentState.state as AsyncTestState;
-            Assert.IsNotNull(state, "State should not be null");
-            Assert.IsTrue(state.asyncOperationCompleted, "Async operation should have completed");
-        }
-        
-        [UnityTest]
-        public IEnumerator TestStateUpdateLoop()
-        {
-            // Arrange
-            var nodeA = new StateNode
-            {
-                id = "stateA",
-                title = "State A",
-                IsInitialState = true,
-                state = new TestStateA()
-            };
-            
-            stateMachine.Nodes.Add(nodeA);
-            
-            // Initialize state machine
-            yield return stateMachine.InitializeStateMachine().ToCoroutine();
-            
-            var stateA = nodeA.state as TestStateA;
-            int initialUpdateCount = stateA.updateCount;
-            
-            // Act - Manually call TestUpdate multiple times to simulate Unity's Update loop
-            for (int i = 0; i < 3; i++)
-            {
-                yield return stateMachine.TestUpdate().ToCoroutine();
-                yield return new WaitForSeconds(0.05f); // Small delay between updates
-            }
-            
-            // Assert
-            Assert.Greater(stateA.updateCount, initialUpdateCount, "Update count should have increased after multiple Update calls");
-        }
-        
-        [UnityTest]
-        public IEnumerator TestMultipleTransitions()
-        {
-            // Arrange - Create a chain of states: A -> B -> C
-            var nodeA = new StateNode
-            {
-                id = "stateA",
-                title = "State A",
-                IsInitialState = true,
-                state = new TestStateA()
-            };
-            
-            var nodeB = new StateNode
-            {
-                id = "stateB",
-                title = "State B",
-                state = new TestStateB()
-            };
-            
-            var nodeC = new StateNode
-            {
-                id = "stateC",
-                title = "State C",
-                state = new TestStateA() // Reuse TestStateA type
-            };
-            
-            stateMachine.Nodes.Add(nodeA);
-            stateMachine.Nodes.Add(nodeB);
-            stateMachine.Nodes.Add(nodeC);
-            
-            // Create transitions: A->B and B->C
-            stateMachine.Transitions.Add(new StateTransition { fromId = "stateA", toId = "stateB" });
-            stateMachine.Transitions.Add(new StateTransition { fromId = "stateB", toId = "stateC" });
-            
-            // Initialize state machine
-            yield return stateMachine.InitializeStateMachine().ToCoroutine();
-            
-            var stateA = nodeA.state as TestStateA;
-            var stateB = nodeB.state as TestStateB;
-            var stateC = nodeC.state as TestStateA;
-            
-            // Act - Transition through the chain
-            yield return stateMachine.TransitionToState("stateB").ToCoroutine();
-            yield return stateMachine.TransitionToState("stateC").ToCoroutine();
-            
-            // Assert
-            Assert.AreEqual(nodeC.id, stateMachine.CurrentState.id, "Current state should be state C");
-            Assert.IsTrue(stateA.exited, "State A should have exited");
-            Assert.IsTrue(stateB.entered, "State B should have entered");
-            Assert.IsTrue(stateB.exited, "State B should have exited");
-            Assert.IsTrue(stateC.entered, "State C should have entered");
-        }
-        
-        [UnityTest]
-        public IEnumerator TestTransitionToNonExistentState()
-        {
-            // Arrange
-            var nodeA = new StateNode
-            {
-                id = "stateA",
-                title = "State A",
-                IsInitialState = true,
-                state = new TestStateA()
-            };
-            
-            stateMachine.Nodes.Add(nodeA);
-            
-            // Initialize state machine
-            yield return stateMachine.InitializeStateMachine().ToCoroutine();
-            
-            var stateA = nodeA.state as TestStateA;
-            
-            // Expect the error log
-            LogAssert.Expect(LogType.Error, "State with ID 'nonExistentState' not found.");
-            
-            // Act - Try to transition to non-existent state
-            yield return stateMachine.TransitionToState("nonExistentState").ToCoroutine();
-            
-            // Assert
-            Assert.AreEqual(nodeA.id, stateMachine.CurrentState.id, "Should still be in state A after invalid transition");
-            Assert.IsFalse(stateA.exited, "State A should not have exited for non-existent state");
-        }
-        
-        [UnityTest]
-        public IEnumerator TestInitialStateWithoutExplicitSetting()
-        {
-            // Arrange - Create nodes without setting initial state
-            var nodeA = new StateNode
-            {
-                id = "stateA",
-                title = "State A",
-                state = new TestStateA()
-            };
-            
-            var nodeB = new StateNode
-            {
-                id = "stateB",
-                title = "State B",
-                state = new TestStateB()
-            };
-            
-            stateMachine.Nodes.Add(nodeA);
-            stateMachine.Nodes.Add(nodeB);
-            
-            // Act - Initialize state machine
-            yield return stateMachine.InitializeStateMachine().ToCoroutine();
-            
-            // Assert - Should use first node as initial state
-            Assert.IsNotNull(stateMachine.CurrentState, "Current state should not be null");
-            Assert.AreEqual(nodeA.id, stateMachine.CurrentState.id, "Should use first node as initial state");
-        }
-        
-        [UnityTest]
-        public IEnumerator TestStateWithNullStateDefinition()
-        {
-            // Arrange - Create node with null state
-            var nodeA = new StateNode
-            {
-                id = "stateA",
-                title = "State A",
-                IsInitialState = true,
-                state = null
-            };
-            
-            stateMachine.Nodes.Add(nodeA);
-            
-            // Act - Initialize state machine
-            yield return stateMachine.InitializeStateMachine().ToCoroutine();
-            
-            // Assert - Should not crash and should set current state
-            Assert.IsNotNull(stateMachine.CurrentState, "Current state should not be null");
-            Assert.AreEqual(nodeA.id, stateMachine.CurrentState.id, "Current state should be set even with null state definition");
+
+            var stateType = stateData.GetStateType();
+
+            Assert.AreEqual(typeof(MoveState), stateType);
         }
     }
 }

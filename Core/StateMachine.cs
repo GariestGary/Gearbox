@@ -8,17 +8,12 @@ namespace VolumeBox.Gearbox.Core
     public class StateMachine : MonoBehaviour
     {
         [SerializeField]
-        private List<StateNode> nodes = new List<StateNode>();
+        private List<StateData> states = new List<StateData>();
 
-        [SerializeField]
-        private List<StateTransition> transitions = new List<StateTransition>();
+        private StateDefinition currentState;
 
-        private StateNode currentState;
-        private StateNode initialState;
-
-        public List<StateNode> Nodes => nodes;
-        public List<StateTransition> Transitions => transitions;
-        public StateNode CurrentState => currentState;
+        public List<StateData> States => states;
+        public StateDefinition CurrentState => currentState;
 
         private void Start()
         {
@@ -29,111 +24,139 @@ namespace VolumeBox.Gearbox.Core
         {
             // Clear current state
             currentState = null;
-            
-            // Find initial state
-            initialState = nodes.Find(n => n.IsInitialState);
-            if (initialState == null && nodes.Count > 0)
+
+            // Instantiate state instances
+            foreach (var stateData in states)
             {
-                initialState = nodes[0];
-                Debug.LogWarning($"No initial state set. Using first state '{initialState.title}' as initial state.");
+                if (stateData.instance != null) continue;
+
+                var stateType = stateData.GetStateType();
+                if (stateType != null)
+                {
+                    try
+                    {
+                        stateData.instance = (StateDefinition)Activator.CreateInstance(stateType);
+                        stateData.instance.StateMachine = this; // Set the reference to this StateMachine
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"Failed to create instance of {stateType.Name}: {ex.Message}");
+                    }
+                }
             }
 
-            if (initialState != null)
+            // Set first state as initial if available
+            if (states.Count > 0 && states[0].instance != null)
             {
-                await EnterState(initialState);
+                await EnterState(states[0].instance);
             }
-            else if (nodes.Count == 0)
+            else
             {
-                Debug.LogWarning("StateMachine has no states defined.");
+                Debug.LogWarning("StateMachine has no valid states defined.");
             }
         }
 
-        public async UniTask TransitionToState(string stateId)
+        public async UniTask TransitionToState(StateDefinition targetState)
         {
-            var targetNode = nodes.Find(n => n.id == stateId);
-            if (targetNode == null)
+            if (targetState == null)
             {
-                Debug.LogError($"State with ID '{stateId}' not found.");
+                Debug.LogError("Target state is null.");
                 return;
             }
 
-            await TransitionToState(targetNode);
-        }
-
-        public async UniTask TransitionToState(StateNode targetNode)
-        {
-            // Check if transition is valid
-            if (currentState != null)
+            var stateData = states.Find(s => s.instance == targetState);
+            if (stateData == null)
             {
-                var hasTransition = transitions.Exists(t => t.fromId == currentState.id && t.toId == targetNode.id);
-                if (!hasTransition)
-                {
-                    Debug.LogWarning($"No transition exists from '{currentState.title}' to '{targetNode.title}'. Transition blocked.");
-                    return;
-                }
+                Debug.LogError($"State '{targetState.GetType().Name}' is not part of this state machine.");
+                return;
             }
 
-            await PerformTransition(targetNode);
+            await PerformTransition(targetState);
         }
 
-        private async UniTask PerformTransition(StateNode targetNode)
+        public async UniTask TransitionToState(string stateName)
+        {
+            var stateData = states.Find(s => s.name == stateName);
+            if (stateData == null || stateData.instance == null)
+            {
+                Debug.LogError($"State '{stateName}' not found or not initialized.");
+                return;
+            }
+
+            await PerformTransition(stateData.instance);
+        }
+
+        public async UniTask TriggerTransition(StateDefinition fromState, int transitionIndex)
+        {
+            var stateData = states.Find(s => s.instance == fromState);
+            if (stateData == null || transitionIndex < 0 || transitionIndex >= stateData.transitionNames.Count)
+            {
+                Debug.LogError("Invalid transition request.");
+                return;
+            }
+
+            var targetStateName = stateData.transitionNames[transitionIndex];
+            await TransitionToState(targetStateName);
+        }
+
+        public List<string> GetAvailableTransitions(StateDefinition state)
+        {
+            var stateData = states.Find(s => s.instance == state);
+            return stateData?.transitionNames ?? new List<string>();
+        }
+
+        private async UniTask PerformTransition(StateDefinition targetState)
         {
             // Exit current state
-            if (currentState != null && currentState.state != null)
+            if (currentState != null)
             {
                 try
                 {
-                    await currentState.state.OnExit();
+                    await currentState.OnExit();
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error during state exit for '{currentState.title}': {ex.Message}");
+                    Debug.LogError($"Error during state exit for '{currentState.GetType().Name}': {ex.Message}");
                 }
             }
 
             // Enter new state
-            if (targetNode.state != null)
+            try
             {
-                try
-                {
-                    await targetNode.state.OnEnter();
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Error during state enter for '{targetNode.title}': {ex.Message}");
-                }
+                await targetState.OnEnter();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error during state enter for '{targetState.GetType().Name}': {ex.Message}");
             }
 
-            currentState = targetNode;
+            currentState = targetState;
         }
 
-        private async UniTask EnterState(StateNode state)
+        private async UniTask EnterState(StateDefinition state)
         {
-            if (state.state != null)
+            try
             {
-                try
-                {
-                    await state.state.OnEnter();
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Error during initial state enter for '{state.title}': {ex.Message}");
-                }
+                await state.OnEnter();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error during initial state enter for '{state.GetType().Name}': {ex.Message}");
             }
             currentState = state;
         }
 
         private async void Update()
         {
-            if (currentState != null && currentState.state != null)
+            if (currentState != null)
             {
                 try
                 {
-                    await currentState.state.OnUpdate();
+                    await currentState.OnUpdate();
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error in state update for '{currentState.title}': {ex.Message}");
+                    Debug.LogError($"Error in state update for '{currentState.GetType().Name}': {ex.Message}");
                 }
             }
         }
@@ -141,15 +164,15 @@ namespace VolumeBox.Gearbox.Core
         // Public method for testing the update logic
         public async UniTask TestUpdate()
         {
-            if (currentState != null && currentState.state != null)
+            if (currentState != null)
             {
                 try
                 {
-                    await currentState.state.OnUpdate();
+                    await currentState.OnUpdate();
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error in state update for '{currentState.title}': {ex.Message}");
+                    Debug.LogError($"Error in state update for '{currentState.GetType().Name}': {ex.Message}");
                 }
             }
         }

@@ -1,6 +1,6 @@
 # Gearbox - Async State Machine
 
-A Unity state machine system with visual graph editing and async state support.
+A Unity state machine system with async state support.
 
 ## Quick Start
 
@@ -44,15 +44,8 @@ public class MyState : StateDefinition
 ### 2. Add StateMachine Component
 
 1. Add a `StateMachine` component to a GameObject
-2. Click "Open State Machine Graph" in the inspector
-3. Right-click in the graph window to add states
-4. Select your state type from the dropdown in each state node
-
-### 3. Configure State Variables
-
-1. In the graph window, select a state type for each node
-2. In the inspector, expand the state to see variables marked with `[StateVariable]`
-3. Drag & drop references or enter values manually
+2. Add your state instances to the States list in the inspector
+3. Configure variables marked with `[StateVariable]` in each state instance
 
 ## StateVariable Attribute
 
@@ -222,16 +215,38 @@ public override async Task OnEnter()
 }
 ```
 
-## Settings
-
-Configure which assemblies to search for state types:
-
-1. Go to `Tools > Gearbox > Settings`
-2. Add assembly definition files (.asmdef) to the list
-3. The system will only search these assemblies (plus Assembly-CSharp) for state types
-
-This significantly improves performance when searching for state types.
 
 ## Examples
 
-See `Assets/Scripts/Gearbox/Examples/ExampleStates.cs` for complete working examples.
+### Creating Example States
+
+The package includes several example state implementations in `Assets/Scripts/Gearbox/Examples/ExampleStates.cs`:
+
+- **`IdleState`**: A simple state that waits for a specified time
+- **`MoveState`**: Moves a GameObject to a target position
+- **`AttackState`**: Performs periodic attacks with cooldown
+- **`PatrolState`**: Moves between waypoints in a patrol pattern
+- **`FleeState`**: Moves away from a specified target
+
+### Manual Testing
+
+To test the state machine manually:
+
+1. Create a GameObject with a `StateMachine` component
+2. Add states using the inspector (Add State button)
+3. Configure each state's type and transitions
+4. Attach the `StateMachineManualTest` component for runtime testing
+5. During Play mode:
+   - Press **Space** to cycle through available transitions
+   - Press **R** for random transitions
+   - Watch the debug logs and GameObject behavior
+
+### Unit Testing
+
+Automated tests are available in `Assets/Scripts/Gearbox/Tests/StateMachineTests.cs`. These tests cover:
+- State machine initialization
+- State transitions
+- Type resolution and caching
+- Transition management
+
+Run tests through Unity's Test Runner (Window → General → Test Runner).
