@@ -7,48 +7,51 @@ namespace VolumeBox.Gearbox.Core
 {
     public class StateMachine : MonoBehaviour
     {
-        [SerializeField]
-        private List<StateData> states = new List<StateData>();
+        [SerializeField] private List<StateData> _states = new();
+        [SerializeField] private bool _initializeOnStart = true;
 
-        private StateDefinition currentState;
+        private StateDefinition _currentStateInstance;
 
-        public List<StateData> States => states;
-        public StateDefinition CurrentState => currentState;
+        public List<StateData> States => _states;
+        public StateDefinition CurrentState => _currentStateInstance;
 
         private void Start()
         {
-            InitializeStateMachine();
+            if (_initializeOnStart)
+            {
+                InitializeStateMachine().Forget();
+            }
         }
 
         public async UniTask InitializeStateMachine()
         {
             // Clear current state
-            currentState = null;
+            _currentStateInstance = null;
 
             // Instantiate state instances
-            foreach (var stateData in states)
+            foreach (var stateData in _states)
             {
-                if (stateData.instance != null) continue;
+                if (stateData.Instance != null) continue;
 
                 var stateType = stateData.GetStateType();
-                if (stateType != null)
+                
+                if (stateType == null) continue;
+                
+                try
                 {
-                    try
-                    {
-                        stateData.instance = (StateDefinition)Activator.CreateInstance(stateType);
-                        stateData.instance.StateMachine = this; // Set the reference to this StateMachine
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError($"Failed to create instance of {stateType.Name}: {ex.Message}");
-                    }
+                    stateData.Instance = (StateDefinition)Activator.CreateInstance(stateType);
+                    stateData.Instance.StateMachine = this; // Set the reference to this StateMachine
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Failed to create instance of {stateType.Name}: {ex.Message}");
                 }
             }
 
             // Set first state as initial if available
-            if (states.Count > 0 && states[0].instance != null)
+            if (_states.Count > 0 && _states[0].Instance != null)
             {
-                await EnterState(states[0].instance);
+                await EnterState(_states[0].Instance);
             }
             else
             {
@@ -64,7 +67,7 @@ namespace VolumeBox.Gearbox.Core
                 return;
             }
 
-            var stateData = states.Find(s => s.instance == targetState);
+            var stateData = _states.Find(s => s.Instance == targetState);
             if (stateData == null)
             {
                 Debug.LogError($"State '{targetState.GetType().Name}' is not part of this state machine.");
@@ -76,47 +79,47 @@ namespace VolumeBox.Gearbox.Core
 
         public async UniTask TransitionToState(string stateName)
         {
-            var stateData = states.Find(s => s.name == stateName);
-            if (stateData == null || stateData.instance == null)
+            var stateData = _states.Find(s => s.Name == stateName);
+            if (stateData == null || stateData.Instance == null)
             {
                 Debug.LogError($"State '{stateName}' not found or not initialized.");
                 return;
             }
 
-            await PerformTransition(stateData.instance);
+            await PerformTransition(stateData.Instance);
         }
 
         public async UniTask TriggerTransition(StateDefinition fromState, int transitionIndex)
         {
-            var stateData = states.Find(s => s.instance == fromState);
-            if (stateData == null || transitionIndex < 0 || transitionIndex >= stateData.transitionNames.Count)
+            var stateData = _states.Find(s => s.Instance == fromState);
+            if (stateData == null || transitionIndex < 0 || transitionIndex >= stateData.TransitionNames.Count)
             {
                 Debug.LogError("Invalid transition request.");
                 return;
             }
 
-            var targetStateName = stateData.transitionNames[transitionIndex];
+            var targetStateName = stateData.TransitionNames[transitionIndex];
             await TransitionToState(targetStateName);
         }
 
         public List<string> GetAvailableTransitions(StateDefinition state)
         {
-            var stateData = states.Find(s => s.instance == state);
-            return stateData?.transitionNames ?? new List<string>();
+            var stateData = _states.Find(s => s.Instance == state);
+            return stateData?.TransitionNames ?? new List<string>();
         }
 
         private async UniTask PerformTransition(StateDefinition targetState)
         {
             // Exit current state
-            if (currentState != null)
+            if (_currentStateInstance != null)
             {
                 try
                 {
-                    await currentState.OnExit();
+                    await _currentStateInstance.OnExit();
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error during state exit for '{currentState.GetType().Name}': {ex.Message}");
+                    Debug.LogError($"Error during state exit for '{_currentStateInstance.GetType().Name}': {ex.Message}");
                 }
             }
 
@@ -130,7 +133,7 @@ namespace VolumeBox.Gearbox.Core
                 Debug.LogError($"Error during state enter for '{targetState.GetType().Name}': {ex.Message}");
             }
 
-            currentState = targetState;
+            _currentStateInstance = targetState;
         }
 
         private async UniTask EnterState(StateDefinition state)
@@ -143,20 +146,20 @@ namespace VolumeBox.Gearbox.Core
             {
                 Debug.LogError($"Error during initial state enter for '{state.GetType().Name}': {ex.Message}");
             }
-            currentState = state;
+            _currentStateInstance = state;
         }
 
         private async void Update()
         {
-            if (currentState != null)
+            if (_currentStateInstance != null)
             {
                 try
                 {
-                    await currentState.OnUpdate();
+                    await _currentStateInstance.OnUpdate();
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error in state update for '{currentState.GetType().Name}': {ex.Message}");
+                    Debug.LogError($"Error in state update for '{_currentStateInstance.GetType().Name}': {ex.Message}");
                 }
             }
         }
@@ -164,15 +167,15 @@ namespace VolumeBox.Gearbox.Core
         // Public method for testing the update logic
         public async UniTask TestUpdate()
         {
-            if (currentState != null)
+            if (_currentStateInstance != null)
             {
                 try
                 {
-                    await currentState.OnUpdate();
+                    await _currentStateInstance.OnUpdate();
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Error in state update for '{currentState.GetType().Name}': {ex.Message}");
+                    Debug.LogError($"Error in state update for '{_currentStateInstance.GetType().Name}': {ex.Message}");
                 }
             }
         }

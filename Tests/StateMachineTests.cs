@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Linq;
+using Cysharp.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -39,8 +40,8 @@ namespace VolumeBox.Gearbox.Tests
             // Add a test state
             var stateData = new StateData
             {
-                name = "TestState",
-                stateTypeName = typeof(IdleState).AssemblyQualifiedName
+                Name = "TestState",
+                StateTypeName = typeof(IdleState).AssemblyQualifiedName
             };
             stateMachine.States.Add(stateData);
 
@@ -48,8 +49,8 @@ namespace VolumeBox.Gearbox.Tests
             stateMachine.InitializeStateMachine();
 
             Assert.AreEqual(1, stateMachine.States.Count);
-            Assert.IsNotNull(stateMachine.States[0].instance);
-            Assert.AreEqual(typeof(IdleState), stateMachine.States[0].instance.GetType());
+            Assert.IsNotNull(stateMachine.States[0].Instance);
+            Assert.AreEqual(typeof(IdleState), stateMachine.States[0].Instance.GetType());
         }
 
         [Test]
@@ -58,13 +59,13 @@ namespace VolumeBox.Gearbox.Tests
             // Setup two states
             var idleState = new StateData
             {
-                name = "Idle",
-                stateTypeName = typeof(IdleState).AssemblyQualifiedName
+                Name = "Idle",
+                StateTypeName = typeof(IdleState).AssemblyQualifiedName
             };
             var moveState = new StateData
             {
-                name = "Move",
-                stateTypeName = typeof(MoveState).AssemblyQualifiedName
+                Name = "Move",
+                StateTypeName = typeof(MoveState).AssemblyQualifiedName
             };
 
             stateMachine.States.Add(idleState);
@@ -85,13 +86,13 @@ namespace VolumeBox.Gearbox.Tests
             // Setup state with transitions
             var stateData = new StateData
             {
-                name = "TestState",
-                stateTypeName = typeof(IdleState).AssemblyQualifiedName,
-                transitionNames = new System.Collections.Generic.List<string> { "State1", "State2" }
+                Name = "TestState",
+                StateTypeName = typeof(IdleState).AssemblyQualifiedName,
+                TransitionNames = new System.Collections.Generic.List<string> { "State1", "State2" }
             };
 
             var idleState = new IdleState();
-            stateData.instance = idleState;
+            stateData.Instance = idleState;
 
             stateMachine.States.Add(stateData);
 
@@ -101,33 +102,36 @@ namespace VolumeBox.Gearbox.Tests
             Assert.Contains("State2", transitions.ToList());
         }
 
-        [Test]
-        public void StateMachine_TriggerTransition()
+        [UnityTest]
+        public System.Collections.IEnumerator StateMachine_TriggerTransition()
         {
             // Setup two states
             var state1Data = new StateData
             {
-                name = "State1",
-                stateTypeName = typeof(IdleState).AssemblyQualifiedName
+                Name = "State1",
+                StateTypeName = typeof(IdleState).AssemblyQualifiedName
             };
             var state2Data = new StateData
             {
-                name = "State2",
-                stateTypeName = typeof(MoveState).AssemblyQualifiedName,
-                transitionNames = new System.Collections.Generic.List<string> { "State1" }
+                Name = "State2",
+                StateTypeName = typeof(MoveState).AssemblyQualifiedName,
+                TransitionNames = new System.Collections.Generic.List<string> { "State1" }
             };
 
             stateMachine.States.Add(state1Data);
             stateMachine.States.Add(state2Data);
 
-            // Set current state to State2
-            var moveState = new MoveState();
-            state2Data.instance = moveState;
-            stateMachine.InitializeStateMachine();
-            stateMachine.TransitionToState(moveState);
+            // Initialize the state machine first
+            var initTask = stateMachine.InitializeStateMachine();
+            yield return initTask.ToCoroutine();
 
-            // Trigger transition to State1 (index 0)
-            stateMachine.TriggerTransition(moveState, 0);
+            // Transition to State2
+            var transitionTask = stateMachine.TransitionToState("State2");
+            yield return transitionTask.ToCoroutine();
+
+            // Now trigger transition to State1 (index 0)
+            var triggerTask = stateMachine.TriggerTransition(stateMachine.CurrentState, 0);
+            yield return triggerTask.ToCoroutine();
 
             Assert.AreEqual(typeof(IdleState), stateMachine.CurrentState.GetType());
         }
@@ -138,8 +142,8 @@ namespace VolumeBox.Gearbox.Tests
             // Setup state machine with a state that has update logic
             var moveStateData = new StateData
             {
-                name = "Move",
-                stateTypeName = typeof(MoveState).AssemblyQualifiedName
+                Name = "Move",
+                StateTypeName = typeof(MoveState).AssemblyQualifiedName
             };
             stateMachine.States.Add(moveStateData);
 
@@ -166,7 +170,7 @@ namespace VolumeBox.Gearbox.Tests
 
             stateData.SetStateType(typeof(IdleState));
 
-            Assert.AreEqual(typeof(IdleState).AssemblyQualifiedName, stateData.stateTypeName);
+            Assert.AreEqual(typeof(IdleState).AssemblyQualifiedName, stateData.StateTypeName);
             Assert.AreEqual(typeof(IdleState), stateData.GetStateType());
         }
 
@@ -175,7 +179,7 @@ namespace VolumeBox.Gearbox.Tests
         {
             var stateData = new StateData
             {
-                stateTypeName = typeof(MoveState).AssemblyQualifiedName
+                StateTypeName = typeof(MoveState).AssemblyQualifiedName
             };
 
             var stateType = stateData.GetStateType();

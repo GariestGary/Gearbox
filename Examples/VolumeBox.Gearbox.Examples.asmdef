@@ -1,15 +1,11 @@
 {
-    "name": "VolumeBox.Gearbox.Tests",
-    "rootNamespace": "VolumeBox.Gearbox.Tests",
+    "name": "VolumeBox.Gearbox.Examples",
+    "rootNamespace": "",
     "references": [
         "GUID:f51ebe6a0ceec4240a699833d6309b23",
-        "GUID:41be746dfe29c2c4c82f6107618c6c60",
-        "GUID:02d842212fd880b4d9c7c9721e24cbce",
-        "GUID:392e6d6af6a690148833b448a1409920"
+        "GUID:41be746dfe29c2c4c82f6107618c6c60"
     ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

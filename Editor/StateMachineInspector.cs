@@ -13,10 +13,12 @@ namespace VolumeBox.Gearbox.Editor
     {
         private readonly Dictionary<string, bool> _foldouts = new Dictionary<string, bool>();
         private SerializedProperty _statesProperty;
+        private SerializedProperty _initializeOnStartProperty;
 
         private void OnEnable()
         {
-            _statesProperty = serializedObject.FindProperty("states");
+            _statesProperty = serializedObject.FindProperty("_states");
+            _initializeOnStartProperty = serializedObject.FindProperty("_initializeOnStart");
         }
 
         public override void OnInspectorGUI()
@@ -26,6 +28,7 @@ namespace VolumeBox.Gearbox.Editor
             var sm = (StateMachine)target;
 
             GUILayout.Space(8);
+            _initializeOnStartProperty.boolValue = EditorGUILayout.Toggle("Initialize On Start",  _initializeOnStartProperty.boolValue);
             EditorGUILayout.LabelField("States", EditorStyles.boldLabel);
 
             // Add State button
@@ -124,14 +127,17 @@ namespace VolumeBox.Gearbox.Editor
             var stateType = Type.GetType(stateTypeName);
             if (stateType == null) return;
 
+            // Get the instance property
+            var instanceProperty = stateProperty.FindPropertyRelative("instance");
+
             // Create managed reference if needed
-            var managedRef = stateProperty.managedReferenceValue;
+            var managedRef = instanceProperty.managedReferenceValue;
             if (managedRef == null || managedRef.GetType() != stateType)
             {
                 try
                 {
                     managedRef = (StateDefinition)Activator.CreateInstance(stateType);
-                    stateProperty.managedReferenceValue = managedRef;
+                    instanceProperty.managedReferenceValue = managedRef;
                     serializedObject.ApplyModifiedProperties();
                 }
                 catch (Exception ex)
@@ -147,7 +153,7 @@ namespace VolumeBox.Gearbox.Editor
             {
                 if (field.IsPublic || field.GetCustomAttributes(typeof(SerializeField), true).Length > 0)
                 {
-                    var fieldProperty = stateProperty.FindPropertyRelative(field.Name);
+                    var fieldProperty = instanceProperty.FindPropertyRelative(field.Name);
                     if (fieldProperty != null)
                     {
                         EditorGUILayout.PropertyField(fieldProperty, new GUIContent(ObjectNames.NicifyVariableName(field.Name)), true);
@@ -159,7 +165,7 @@ namespace VolumeBox.Gearbox.Editor
         private void DrawTransitionsList(SerializedProperty transitionsProperty)
         {
             var sm = (StateMachine)target;
-            var stateNames = sm.States.Select(s => string.IsNullOrEmpty(s.name) ? "Unnamed" : s.name).ToArray();
+            var stateNames = sm.States.Select(s => string.IsNullOrEmpty(s.Name) ? "Unnamed" : s.Name).ToArray();
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.LabelField("Available States", EditorStyles.miniBoldLabel);

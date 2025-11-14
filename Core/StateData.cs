@@ -1,36 +1,26 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace VolumeBox.Gearbox.Core
 {
     [Serializable]
     public class StateData
     {
-        public string name;
-        public string stateTypeName;
-        public List<string> transitionNames = new List<string>();
+        public string Name;
+        public string StateTypeName;
+        public List<string> TransitionNames = new();
 
-        [NonSerialized]
-        public StateDefinition instance;
+        [SerializeReference] public StateDefinition Instance;
 
         public Type GetStateType()
         {
-            if (string.IsNullOrEmpty(stateTypeName))
-                return null;
-
-            return Type.GetType(stateTypeName);
+            return string.IsNullOrEmpty(StateTypeName) ? null : Type.GetType(StateTypeName);
         }
 
         public void SetStateType(Type type)
         {
-            if (type != null)
-            {
-                stateTypeName = type.AssemblyQualifiedName;
-            }
-            else
-            {
-                stateTypeName = null;
-            }
+            StateTypeName = type?.AssemblyQualifiedName;
         }
     }
 }
