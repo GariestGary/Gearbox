@@ -1,0 +1,34 @@
+{
+  "name": "com.volumebox.gearbox",
+  "displayName": "Gearbox - Async State Machine",
+  "version": "0.0.1a",
+  "unity": "2021.3",
+  "description": "A powerful, flexible state machine system for Unity with async/await support.",
+  "keywords": [
+    "state machine",
+    "async",
+    "await",
+    "unity",
+    "fsm",
+    "finite state machine",
+    "inspector",
+    "visual scripting",
+    "ai",
+    "behavior",
+    "game logic"
+  ],
+  "category": "Scripting",
+  "dependencies": {
+    "com.cysharp.unitask": "2.5.0"
+  },
+  "author": {
+    "name": "GariestGary",
+    "url": "https://github.com/GariestGary"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GariestGary/Gearbox.git"
+  },
+  "license": "MIT",
+  "type": "library"
+}
