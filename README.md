@@ -10,6 +10,9 @@
 
 *No more graph editors - Pure code-driven state management with visual inspector interface*
 
+> [!WARNING]
+> Some parts of this package was written by AI and need to be tested properly. Not recommended to use in production. Later this warning will gone :)
+
 </div>
 
 ---
