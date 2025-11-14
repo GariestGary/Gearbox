@@ -1,5 +1,8 @@
 # 🎮 Gearbox - Async State Machine
 
+> [!WARNING]
+> Some parts of this package was written by AI and need to be tested properly. Not recommended to use in production. Later this warning will gone :)
+
 <div align="center">
 
 **A powerful, flexible state machine system for Unity with async/await support**
@@ -10,8 +13,6 @@
 
 *No more graph editors - Pure code-driven state management with visual inspector interface*
 
-> [!WARNING]
-> Some parts of this package was written by AI and need to be tested properly. Not recommended to use in production. Later this warning will gone :)
 
 </div>
 
