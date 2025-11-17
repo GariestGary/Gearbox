@@ -117,10 +117,14 @@ namespace VolumeBox.Gearbox.Editor
             {
                 var dropdown = new StateTypeAdvancedDropdown(new AdvancedDropdownState(), selectedType =>
                 {
+                    var oldTypeName = stateTypeNameProperty.stringValue;
                     stateTypeNameProperty.stringValue = selectedType.AssemblyQualifiedName;
 
-                    // Create instance immediately when type is selected
-                    CreateStateInstanceIfNeeded(stateProperty, selectedType);
+                    // Only create a new instance if the type actually changed
+                    if (oldTypeName != selectedType.AssemblyQualifiedName)
+                    {
+                        CreateStateInstanceIfNeeded(stateProperty, selectedType);
+                    }
 
                     serializedObject.ApplyModifiedProperties();
                 });

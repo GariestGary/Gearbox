@@ -37,15 +37,18 @@ namespace VolumeBox.Gearbox.Core
             // Instantiate state instances
             foreach (var stateData in _states)
             {
-                if (stateData.Instance != null) continue;
-
                 var stateType = stateData.GetStateType();
-                
+
                 if (stateType == null) continue;
-                
+
                 try
                 {
-                    stateData.Instance ??= (StateDefinition)Activator.CreateInstance(stateType);
+                    // Use existing instance if available (created in editor), otherwise create new one
+                    if (stateData.Instance == null)
+                    {
+                        stateData.Instance = (StateDefinition)Activator.CreateInstance(stateType);
+                    }
+
                     stateData.Instance.StateMachine = this; // Set the reference to this StateMachine
 
                     _stateInitializeAction?.Invoke(stateData.Instance);
