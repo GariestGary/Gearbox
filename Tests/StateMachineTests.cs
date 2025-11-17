@@ -186,5 +186,30 @@ namespace VolumeBox.Gearbox.Tests
 
             Assert.AreEqual(typeof(MoveState), stateType);
         }
+
+        [UnityTest]
+        public IEnumerator StateMachine_InstantiateActionWorks()
+        {
+            // Add a test state
+            var stateData = new StateData
+            {
+                Name = "TestState",
+                StateTypeName = typeof(IdleState).AssemblyQualifiedName
+            };
+            stateMachine.States.Add(stateData);
+
+            // Set up action to verify it's called
+            bool actionCalled = false;
+            stateMachine.SetStateInitializeAction((state) => actionCalled = true);
+
+            // Initialize the state machine
+            var initTask = stateMachine.InitializeStateMachine();
+            yield return initTask.ToCoroutine();
+
+            // Assert that the action was invoked
+            Assert.IsTrue(actionCalled);
+            Assert.IsNotNull(stateMachine.States[0].Instance);
+            Assert.AreEqual(typeof(IdleState), stateMachine.States[0].Instance.GetType());
+        }
     }
 }

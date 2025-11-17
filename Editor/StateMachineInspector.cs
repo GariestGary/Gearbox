@@ -56,9 +56,9 @@ namespace VolumeBox.Gearbox.Editor
         private void DrawStateElement(int index)
         {
             var stateProperty = _statesProperty.GetArrayElementAtIndex(index);
-            var nameProperty = stateProperty.FindPropertyRelative("name");
-            var stateTypeNameProperty = stateProperty.FindPropertyRelative("stateTypeName");
-            var transitionsProperty = stateProperty.FindPropertyRelative("transitionNames");
+            var nameProperty = stateProperty.FindPropertyRelative("Name");
+            var stateTypeNameProperty = stateProperty.FindPropertyRelative("StateTypeName");
+            var transitionsProperty = stateProperty.FindPropertyRelative("TransitionNames");
 
             var foldoutId = $"state_{index}";
             if (!_foldouts.ContainsKey(foldoutId)) { _foldouts[foldoutId] = true; }
@@ -121,14 +121,14 @@ namespace VolumeBox.Gearbox.Editor
 
         private void DrawStateInstanceProperties(SerializedProperty stateProperty)
         {
-            var stateTypeName = stateProperty.FindPropertyRelative("stateTypeName").stringValue;
+            var stateTypeName = stateProperty.FindPropertyRelative("StateTypeName").stringValue;
             if (string.IsNullOrEmpty(stateTypeName)) return;
 
             var stateType = Type.GetType(stateTypeName);
             if (stateType == null) return;
 
             // Get the instance property
-            var instanceProperty = stateProperty.FindPropertyRelative("instance");
+            var instanceProperty = stateProperty.FindPropertyRelative("Instance");
 
             // Create managed reference if needed
             var managedRef = instanceProperty.managedReferenceValue;
@@ -206,8 +206,8 @@ namespace VolumeBox.Gearbox.Editor
         {
             _statesProperty.InsertArrayElementAtIndex(_statesProperty.arraySize);
             var newElement = _statesProperty.GetArrayElementAtIndex(_statesProperty.arraySize - 1);
-            newElement.FindPropertyRelative("name").stringValue = $"State {_statesProperty.arraySize}";
-            newElement.FindPropertyRelative("stateTypeName").stringValue = "";
+            newElement.FindPropertyRelative("Name").stringValue = $"State {_statesProperty.arraySize}";
+            newElement.FindPropertyRelative("StateTypeName").stringValue = "";
             serializedObject.ApplyModifiedProperties();
         }
 

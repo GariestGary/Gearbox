@@ -11,6 +11,7 @@ namespace VolumeBox.Gearbox.Core
         [SerializeField] private bool _initializeOnStart = true;
 
         private StateDefinition _currentStateInstance;
+        private Action<StateDefinition> _stateInitializeAction;
 
         public List<StateData> States => _states;
         public StateDefinition CurrentState => _currentStateInstance;
@@ -21,6 +22,11 @@ namespace VolumeBox.Gearbox.Core
             {
                 InitializeStateMachine().Forget();
             }
+        }
+
+        public void SetStateInitializeAction(Action<StateDefinition> action)
+        {
+            _stateInitializeAction = action;
         }
 
         public async UniTask InitializeStateMachine()
@@ -39,8 +45,10 @@ namespace VolumeBox.Gearbox.Core
                 
                 try
                 {
-                    stateData.Instance = (StateDefinition)Activator.CreateInstance(stateType);
+                    stateData.Instance ??= (StateDefinition)Activator.CreateInstance(stateType);
                     stateData.Instance.StateMachine = this; // Set the reference to this StateMachine
+
+                    _stateInitializeAction?.Invoke(stateData.Instance);
                 }
                 catch (Exception ex)
                 {
