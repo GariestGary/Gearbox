@@ -12,12 +12,31 @@ namespace VolumeBox.Gearbox.Editor
         private static Dictionary<string, Type[]> _cachedTypes = new Dictionary<string, Type[]>();
         private static DateTime _lastCacheUpdate = DateTime.MinValue;
 
+        public class StateTypeInfo
+        {
+            public Type Type { get; }
+            public string CategoryPath { get; }
+            public string[] CategoryParts { get; }
+
+            public StateTypeInfo(Type type, string categoryPath)
+            {
+                Type = type;
+                CategoryPath = categoryPath ?? "";
+                CategoryParts = string.IsNullOrEmpty(CategoryPath) ? new string[0] : CategoryPath.Split('/');
+            }
+        }
+
         public static Type[] GetStateDefinitionTypes()
+        {
+            return GetStateDefinitionTypesWithInfo().Select(info => info.Type).ToArray();
+        }
+
+        public static StateTypeInfo[] GetStateDefinitionTypesWithInfo()
         {
             // Cache for 5 seconds to avoid too frequent updates
             if ((DateTime.Now - _lastCacheUpdate).TotalSeconds < 5 && _cachedTypes.ContainsKey("StateDefinitions"))
             {
-                return _cachedTypes["StateDefinitions"];
+                return _cachedTypes["StateDefinitions"].Select(t => new StateTypeInfo(t, GetCategoryPath(t))).ToArray();
             }
 
             var preferences = GearboxPreferences.Instance;
@@ -51,7 +70,7 @@ namespace VolumeBox.Gearbox.Editor
             _cachedTypes["StateDefinitions"] = result;
             _lastCacheUpdate = DateTime.Now;
 
-            return result;
+            return result.Select(t => new StateTypeInfo(t, GetCategoryPath(t))).ToArray();
         }
 
         private static void AddStateTypesFromAssembly(Assembly assembly, List<Type> stateTypes)
@@ -94,6 +113,12 @@ namespace VolumeBox.Gearbox.Editor
         {
             _cachedTypes.Clear();
             _lastCacheUpdate = DateTime.MinValue;
+        }
+
+        private static string GetCategoryPath(Type type)
+        {
+            var attribute = type.GetCustomAttribute<StateCategoryAttribute>();
+            return attribute?.CategoryPath ?? "";
         }
 
         [Serializable]

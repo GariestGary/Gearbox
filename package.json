@@ -1,6 +1,6 @@
 {
   "name": "com.volumebox.gearbox",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "displayName": "Gearbox",
   "description": "A powerful, flexible state machine system for Unity with async/await support.",
   "dependencies": {

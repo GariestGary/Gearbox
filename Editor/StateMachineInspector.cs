@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using VolumeBox.Gearbox.Core;
 
@@ -87,7 +88,7 @@ namespace VolumeBox.Gearbox.Editor
                 EditorGUILayout.PropertyField(nameProperty, new GUIContent("Name"));
 
                 // Type dropdown
-                DrawStateTypeDropdown(stateTypeNameProperty);
+                DrawStateTypeDropdown(stateProperty);
 
                 // State instance properties
                 DrawStateInstanceProperties(stateProperty);
@@ -102,21 +103,31 @@ namespace VolumeBox.Gearbox.Editor
             EditorGUILayout.EndVertical();
         }
 
-        private void DrawStateTypeDropdown(SerializedProperty stateTypeNameProperty)
+        private void DrawStateTypeDropdown(SerializedProperty stateProperty)
         {
-            var types = GetStateDefinitionTypes();
-            var typeNames = types.Select(t => t.Name).ToArray();
+            var stateTypeNameProperty = stateProperty.FindPropertyRelative("StateTypeName");
             var currentTypeName = stateTypeNameProperty.stringValue;
-            var currentIndex = string.IsNullOrEmpty(currentTypeName) ? -1 :
-                Array.IndexOf(typeNames, Type.GetType(currentTypeName)?.Name ?? "");
+            var currentType = string.IsNullOrEmpty(currentTypeName) ? null : Type.GetType(currentTypeName);
+            var displayName = currentType?.Name ?? "Select State Type";
 
-            EditorGUI.BeginChangeCheck();
-            var newIndex = EditorGUILayout.Popup("Type", currentIndex, typeNames);
-            if (EditorGUI.EndChangeCheck() && newIndex >= 0 && newIndex < types.Length)
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.PrefixLabel("Type");
+
+            if (GUILayout.Button(displayName, EditorStyles.popup))
             {
-                stateTypeNameProperty.stringValue = types[newIndex].AssemblyQualifiedName;
-                serializedObject.ApplyModifiedProperties();
+                var dropdown = new StateTypeAdvancedDropdown(new AdvancedDropdownState(), selectedType =>
+                {
+                    stateTypeNameProperty.stringValue = selectedType.AssemblyQualifiedName;
+
+                    // Create instance immediately when type is selected
+                    CreateStateInstanceIfNeeded(stateProperty, selectedType);
+
+                    serializedObject.ApplyModifiedProperties();
+                });
+                dropdown.Show(new Rect(Event.current.mousePosition, Vector2.zero));
             }
+
+            EditorGUILayout.EndHorizontal();
         }
 
         private void DrawStateInstanceProperties(SerializedProperty stateProperty)
@@ -131,34 +142,46 @@ namespace VolumeBox.Gearbox.Editor
             var instanceProperty = stateProperty.FindPropertyRelative("Instance");
 
             // Create managed reference if needed
-            var managedRef = instanceProperty.managedReferenceValue;
-            if (managedRef == null || managedRef.GetType() != stateType)
+            if (instanceProperty.managedReferenceValue == null)
             {
-                try
-                {
-                    managedRef = (StateDefinition)Activator.CreateInstance(stateType);
-                    instanceProperty.managedReferenceValue = managedRef;
-                    serializedObject.ApplyModifiedProperties();
-                }
-                catch (Exception ex)
-                {
-                    EditorGUILayout.HelpBox($"Failed to create state instance: {ex.Message}", MessageType.Error);
-                    return;
-                }
+                CreateStateInstanceIfNeeded(stateProperty, stateType);
             }
 
-            // Draw all serializable fields
-            var fields = stateType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            foreach (var field in fields)
+            var managedRef = instanceProperty.managedReferenceValue;
+            if (managedRef != null && managedRef.GetType() == stateType)
             {
-                if (field.IsPublic || field.GetCustomAttributes(typeof(SerializeField), true).Length > 0)
+                // Draw all serializable fields
+                var fields = stateType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                foreach (var field in fields)
                 {
-                    var fieldProperty = instanceProperty.FindPropertyRelative(field.Name);
-                    if (fieldProperty != null)
+                    if (field.IsPublic || field.GetCustomAttributes(typeof(SerializeField), true).Length > 0)
                     {
-                        EditorGUILayout.PropertyField(fieldProperty, new GUIContent(ObjectNames.NicifyVariableName(field.Name)), true);
+                        var fieldProperty = instanceProperty.FindPropertyRelative(field.Name);
+                        if (fieldProperty != null)
+                        {
+                            EditorGUILayout.PropertyField(fieldProperty, new GUIContent(ObjectNames.NicifyVariableName(field.Name)), true);
+                        }
                     }
                 }
+            }
+            else
+            {
+                EditorGUILayout.HelpBox("State instance is not properly initialized.", MessageType.Warning);
+            }
+        }
+
+        private void CreateStateInstanceIfNeeded(SerializedProperty stateProperty, Type stateType)
+        {
+            var instanceProperty = stateProperty.FindPropertyRelative("Instance");
+            try
+            {
+                var managedRef = (StateDefinition)Activator.CreateInstance(stateType);
+                instanceProperty.managedReferenceValue = managedRef;
+                serializedObject.ApplyModifiedProperties();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to create state instance: {ex.Message}");
             }
         }
 
