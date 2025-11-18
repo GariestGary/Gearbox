@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Linq;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
@@ -13,38 +12,37 @@ namespace VolumeBox.Gearbox.Editor
     public class StateMachineInspector : UnityEditor.Editor
     {
         private readonly Dictionary<string, bool> _foldouts = new Dictionary<string, bool>();
-        private SerializedProperty _statesProperty;
-        private SerializedProperty _initializeOnStartProperty;
-
-        private void OnEnable()
-        {
-            _statesProperty = serializedObject.FindProperty("_states");
-            _initializeOnStartProperty = serializedObject.FindProperty("_initializeOnStart");
-        }
 
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
 
-            var sm = (StateMachine)target;
+            var statesProperty = serializedObject.FindProperty("_states");
+            var initializeOnStartProperty = serializedObject.FindProperty("_initializeOnStart");
 
             GUILayout.Space(8);
-            _initializeOnStartProperty.boolValue = EditorGUILayout.Toggle("Initialize On Start",  _initializeOnStartProperty.boolValue);
+            if (initializeOnStartProperty != null)
+            {
+                initializeOnStartProperty.boolValue = EditorGUILayout.Toggle("Initialize On Start", initializeOnStartProperty.boolValue);
+            }
             EditorGUILayout.LabelField("States", EditorStyles.boldLabel);
 
             // Add State button
             if (GUILayout.Button("Add State"))
             {
-                AddNewState();
+                if (statesProperty != null)
+                {
+                    AddNewState(statesProperty);
+                }
             }
 
             EditorGUILayout.Space();
 
-            if (_statesProperty != null)
+            if (statesProperty != null)
             {
-                for (int i = 0; i < _statesProperty.arraySize; i++)
+                for (int i = 0; i < statesProperty.arraySize; i++)
                 {
-                    DrawStateElement(i);
+                    DrawStateElement(statesProperty, i);
                 } 
             }
 
@@ -54,9 +52,9 @@ namespace VolumeBox.Gearbox.Editor
             }
         }
 
-        private void DrawStateElement(int index)
+        private void DrawStateElement(SerializedProperty statesProperty, int index)
         {
-            var stateProperty = _statesProperty.GetArrayElementAtIndex(index);
+            var stateProperty = statesProperty.GetArrayElementAtIndex(index);
             var nameProperty = stateProperty.FindPropertyRelative("Name");
             stateProperty.FindPropertyRelative("StateTypeName");
 
@@ -72,11 +70,11 @@ namespace VolumeBox.Gearbox.Editor
 
             _foldouts[foldoutId] = EditorGUILayout.Foldout(_foldouts[foldoutId], stateName, true);
             GUILayout.FlexibleSpace(); // Add flexible space to push checkbox and button to the right
-            DrawInitialStateCheckbox(index, stateProperty);
+            DrawInitialStateCheckbox(statesProperty, index, stateProperty);
 
             if (GUILayout.Button("Remove", GUILayout.Width(60)))
             {
-                RemoveState(index);
+                RemoveState(statesProperty, index);
                 return;
             }
 
@@ -102,10 +100,9 @@ namespace VolumeBox.Gearbox.Editor
             EditorGUILayout.EndVertical();
         }
 
-        private void DrawInitialStateCheckbox(int index, SerializedProperty stateProperty)
+        private void DrawInitialStateCheckbox(SerializedProperty statesProperty, int index, SerializedProperty stateProperty)
         {
             var isInitialStateProperty = stateProperty.FindPropertyRelative("IsInitialState");
-            var sm = (StateMachine)target;
 
             EditorGUI.BeginChangeCheck();
             EditorGUILayout.LabelField("Initial State", EditorStyles.boldLabel, GUILayout.Width(85));
@@ -116,13 +113,16 @@ namespace VolumeBox.Gearbox.Editor
             // If enabling this checkbox, disable all others
             if (newValue)
             {
-                for (int i = 0; i < sm.States.Count; i++)
+                if (statesProperty != null)
                 {
-                    if (i == index) continue;
-                    
-                    var otherStateProperty = _statesProperty.GetArrayElementAtIndex(i);
-                    var otherIsInitialProperty = otherStateProperty.FindPropertyRelative("IsInitialState");
-                    otherIsInitialProperty.boolValue = false;
+                    for (int i = 0; i < statesProperty.arraySize; i++)
+                    {
+                        if (i == index) continue;
+
+                        var otherStateProperty = statesProperty.GetArrayElementAtIndex(i);
+                        var otherIsInitialProperty = otherStateProperty.FindPropertyRelative("IsInitialState");
+                        otherIsInitialProperty.boolValue = false;
+                    }
                 }
             }
             
@@ -219,26 +219,61 @@ namespace VolumeBox.Gearbox.Editor
         }
 
 
-        private void AddNewState()
+        private void AddNewState(SerializedProperty statesProperty)
         {
-            var sm = (StateMachine)target;
-            _statesProperty.InsertArrayElementAtIndex(_statesProperty.arraySize);
-            var newElement = _statesProperty.GetArrayElementAtIndex(_statesProperty.arraySize - 1);
-            newElement.FindPropertyRelative("Name").stringValue = $"State {_statesProperty.arraySize}";
+            statesProperty.InsertArrayElementAtIndex(statesProperty.arraySize);
+            var newElementIndex = statesProperty.arraySize - 1;
+            var newElement = statesProperty.GetArrayElementAtIndex(newElementIndex);
+            newElement.FindPropertyRelative("Name").stringValue = $"State {statesProperty.arraySize}";
             newElement.FindPropertyRelative("StateTypeName").stringValue = "";
 
-            // If this is the first state, make it initial by default
-            if (sm.States.Count == 1)
+            var newIsInitialProperty = newElement.FindPropertyRelative("IsInitialState");
+            var hasInitialState = HasInitialState(statesProperty, newElementIndex);
+            newIsInitialProperty.boolValue = !hasInitialState;
+
+            // Ensure only one initial state exists
+            if (!hasInitialState)
             {
-                newElement.FindPropertyRelative("IsInitialState").boolValue = true;
+                SetInitialState(statesProperty, newElementIndex);
+            }
+            else
+            {
+                newIsInitialProperty.boolValue = false;
             }
 
             serializedObject.ApplyModifiedProperties();
         }
 
-        private void RemoveState(int index)
+        private static bool HasInitialState(SerializedProperty statesProperty, int skipIndex = -1)
         {
-            _statesProperty.DeleteArrayElementAtIndex(index);
+            for (int i = 0; i < statesProperty.arraySize; i++)
+            {
+                if (i == skipIndex) continue;
+                var state = statesProperty.GetArrayElementAtIndex(i);
+                var isInitial = state.FindPropertyRelative("IsInitialState");
+                if (isInitial != null && isInitial.boolValue)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void SetInitialState(SerializedProperty statesProperty, int indexToEnable)
+        {
+            for (int i = 0; i < statesProperty.arraySize; i++)
+            {
+                var state = statesProperty.GetArrayElementAtIndex(i);
+                var isInitial = state.FindPropertyRelative("IsInitialState");
+                if (isInitial == null) continue;
+                isInitial.boolValue = i == indexToEnable;
+            }
+        }
+
+        private void RemoveState(SerializedProperty statesProperty, int index)
+        {
+            statesProperty.DeleteArrayElementAtIndex(index);
             serializedObject.ApplyModifiedProperties();
         }
 
