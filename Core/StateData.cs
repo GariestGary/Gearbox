@@ -9,7 +9,7 @@ namespace VolumeBox.Gearbox.Core
     {
         public string Name;
         public string StateTypeName;
-        public List<string> TransitionNames = new();
+        public bool IsInitialState;
 
         [SerializeReference] public StateDefinition Instance;
 

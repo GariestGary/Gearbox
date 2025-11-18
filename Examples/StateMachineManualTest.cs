@@ -33,51 +33,41 @@ namespace VolumeBox.Gearbox.Tests
             Debug.Log("StateMachine Manual Test Started");
             Debug.Log($"Number of states: {_stateMachine.States.Count}");
             Debug.Log($"Current state: {_stateMachine.CurrentState?.GetType().Name ?? "None"}");
-            Debug.Log($"Press '{_transitionKey}' to trigger next transition");
-            Debug.Log($"Press '{_randomTransitionKey}' for random transition");
+            Debug.Log($"Press '{_transitionKey}' to cycle through states");
+            Debug.Log($"Press '{_randomTransitionKey}' for random state transition");
         }
 
         private void Update()
         {
             if (_stateMachine == null || _stateMachine.CurrentState == null) return;
 
-            // Trigger next transition in sequence
+            // Cycle through all states by type
             if (Input.GetKeyDown(_transitionKey))
             {
-                var transitions = _stateMachine.GetAvailableTransitions(_stateMachine.CurrentState);
-                if (transitions.Count > 0)
+                _currentTransitionIndex = (_currentTransitionIndex + 1) % _stateMachine.States.Count;
+                var targetState = _stateMachine.States[_currentTransitionIndex].Instance;
+                if (targetState != null)
                 {
-                    var nextStateName = transitions[_currentTransitionIndex % transitions.Count];
-                    Debug.Log($"Transitioning to: {nextStateName}");
-
-                    _stateMachine.TransitionToState(nextStateName);
-                    _currentTransitionIndex++;
-
+                    Debug.Log($"Transitioning to: {targetState.GetType().Name}");
+                    _stateMachine.TransitionToState(targetState);
                     Debug.Log($"Current state: {_stateMachine.CurrentState?.GetType().Name ?? "None"}");
-                }
-                else
-                {
-                    Debug.Log("No available transitions from current state");
                 }
             }
 
-            // Random transition
+            // Random transition to any state
             if (Input.GetKeyDown(_randomTransitionKey))
             {
-                var transitions = _stateMachine.GetAvailableTransitions(_stateMachine.CurrentState);
-                if (transitions.Count > 0)
+                var validStates = _stateMachine.States.FindAll(s => s.Instance != null).ToArray();
+                if (validStates.Length > 0)
                 {
-                    var randomIndex = Random.Range(0, transitions.Count);
-                    var randomStateName = transitions[randomIndex];
-                    Debug.Log($"Random transition to: {randomStateName}");
-
-                    _stateMachine.TransitionToState(randomStateName);
-
+                    var randomState = validStates[Random.Range(0, validStates.Length)].Instance;
+                    Debug.Log($"Random transition to: {randomState.GetType().Name}");
+                    _stateMachine.TransitionToState(randomState);
                     Debug.Log($"Current state: {_stateMachine.CurrentState?.GetType().Name ?? "None"}");
                 }
                 else
                 {
-                    Debug.Log("No available transitions from current state");
+                    Debug.Log("No valid states available");
                 }
             }
         }
@@ -89,19 +79,18 @@ namespace VolumeBox.Gearbox.Tests
             GUI.Label(new Rect(10, 10, 300, 20), $"Current State: {_stateMachine.CurrentState?.GetType().Name ?? "None"}");
             GUI.Label(new Rect(10, 30, 300, 20), $"States Count: {_stateMachine.States.Count}");
 
-            if (_stateMachine.CurrentState != null)
+            if (_stateMachine.States.Count > 0)
             {
-                var transitions = _stateMachine.GetAvailableTransitions(_stateMachine.CurrentState);
-                GUI.Label(new Rect(10, 50, 300, 20), $"Available Transitions: {transitions.Count}");
-
-                for (int i = 0; i < transitions.Count && i < 5; i++)
+                GUI.Label(new Rect(10, 50, 300, 20), "Available States:");
+                var validStates = _stateMachine.States.FindAll(s => s.Instance != null);
+                for (int i = 0; i < validStates.Count && i < 5; i++)
                 {
-                    GUI.Label(new Rect(10, 70 + i * 20, 200, 20), $"- {transitions[i]}");
+                    GUI.Label(new Rect(10, 70 + i * 20, 200, 20), $"- {validStates[i].Instance.GetType().Name}");
                 }
             }
 
-            GUI.Label(new Rect(10, Screen.height - 60, 400, 20), $"Press '{_transitionKey}' for sequential transitions");
-            GUI.Label(new Rect(10, Screen.height - 40, 400, 20), $"Press '{_randomTransitionKey}' for random transitions");
+            GUI.Label(new Rect(10, Screen.height - 60, 400, 20), $"Press '{_transitionKey}' for sequential state transitions");
+            GUI.Label(new Rect(10, Screen.height - 40, 400, 20), $"Press '{_randomTransitionKey}' for random state transitions");
         }
     }
 }

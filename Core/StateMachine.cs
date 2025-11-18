@@ -59,10 +59,17 @@ namespace VolumeBox.Gearbox.Core
                 }
             }
 
-            // Set first state as initial if available
-            if (_states.Count > 0 && _states[0].Instance != null)
+            // Set initial state if available
+            var initialState = _states.Find(s => s.IsInitialState && s.Instance != null);
+            if (initialState == null && _states.Count > 0)
             {
-                await EnterState(_states[0].Instance);
+                // Fallback to first state if no initial state is marked
+                initialState = _states.Find(s => s.Instance != null);
+            }
+
+            if (initialState != null)
+            {
+                await EnterState(initialState.Instance);
             }
             else
             {
@@ -90,37 +97,56 @@ namespace VolumeBox.Gearbox.Core
 
         public async UniTask TransitionToState(string stateName)
         {
-            var stateData = _states.Find(s => s.Name == stateName);
-            if (stateData == null || stateData.Instance == null)
+            var matchingStates = _states.FindAll(s => s.Name == stateName && s.Instance != null);
+            if (matchingStates.Count == 0)
             {
                 Debug.LogError($"State '{stateName}' not found or not initialized.");
+                return;
+            }
+
+            // If multiple states have the same name, select one randomly
+            var selectedState = matchingStates.Count == 1
+                ? matchingStates[0]
+                : matchingStates[UnityEngine.Random.Range(0, matchingStates.Count)];
+
+            await PerformTransition(selectedState.Instance);
+        }
+
+        public async UniTask TransitionToState<T>() where T : StateDefinition
+        {
+            await TransitionToState<T>(null);
+        }
+
+        public async UniTask TransitionToState<T>(string stateName = null) where T : StateDefinition
+        {
+            StateData stateData = null;
+
+            if (string.IsNullOrEmpty(stateName))
+            {
+                // Find first state of the specified type
+                stateData = _states.Find(s => s.Instance != null && s.Instance.GetType() == typeof(T));
+            }
+            else
+            {
+                // Find state by type and name
+                stateData = _states.Find(s => s.Instance != null && s.Instance.GetType() == typeof(T) && s.Name == stateName);
+            }
+
+            if (stateData == null || stateData.Instance == null)
+            {
+                var typeName = typeof(T).Name;
+                var namePart = string.IsNullOrEmpty(stateName) ? "" : $" with name '{stateName}'";
+                Debug.LogError($"State of type '{typeName}'{namePart} not found or not initialized.");
                 return;
             }
 
             await PerformTransition(stateData.Instance);
         }
 
-        public async UniTask TriggerTransition(StateDefinition fromState, int transitionIndex)
-        {
-            var stateData = _states.Find(s => s.Instance == fromState);
-            if (stateData == null || transitionIndex < 0 || transitionIndex >= stateData.TransitionNames.Count)
-            {
-                Debug.LogError("Invalid transition request.");
-                return;
-            }
-
-            var targetStateName = stateData.TransitionNames[transitionIndex];
-            await TransitionToState(targetStateName);
-        }
-
-        public List<string> GetAvailableTransitions(StateDefinition state)
-        {
-            var stateData = _states.Find(s => s.Instance == state);
-            return stateData?.TransitionNames ?? new List<string>();
-        }
 
         private async UniTask PerformTransition(StateDefinition targetState)
         {
+            Debug.Log(_currentStateInstance);
             // Exit current state
             if (_currentStateInstance != null)
             {
@@ -134,21 +160,13 @@ namespace VolumeBox.Gearbox.Core
                 }
             }
 
-            // Enter new state
-            try
-            {
-                await targetState.OnEnter();
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error during state enter for '{targetState.GetType().Name}': {ex.Message}");
-            }
-
-            _currentStateInstance = targetState;
+            await EnterState(targetState);
         }
 
         private async UniTask EnterState(StateDefinition state)
         {
+            _currentStateInstance = state; // Set current state BEFORE calling OnEnter
+
             try
             {
                 await state.OnEnter();
@@ -157,7 +175,6 @@ namespace VolumeBox.Gearbox.Core
             {
                 Debug.LogError($"Error during initial state enter for '{state.GetType().Name}': {ex.Message}");
             }
-            _currentStateInstance = state;
         }
 
         private async void Update()

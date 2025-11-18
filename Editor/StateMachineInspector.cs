@@ -58,28 +58,30 @@ namespace VolumeBox.Gearbox.Editor
         {
             var stateProperty = _statesProperty.GetArrayElementAtIndex(index);
             var nameProperty = stateProperty.FindPropertyRelative("Name");
-            var stateTypeNameProperty = stateProperty.FindPropertyRelative("StateTypeName");
-            var transitionsProperty = stateProperty.FindPropertyRelative("TransitionNames");
+            stateProperty.FindPropertyRelative("StateTypeName");
 
             var foldoutId = $"state_{index}";
-            if (!_foldouts.ContainsKey(foldoutId)) { _foldouts[foldoutId] = true; }
+            
+            _foldouts.TryAdd(foldoutId, true);
 
             var stateName = string.IsNullOrEmpty(nameProperty.stringValue) ? $"State {index + 1}" : nameProperty.stringValue;
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.BeginHorizontal();
             EditorGUI.indentLevel++;
-            
+
             _foldouts[foldoutId] = EditorGUILayout.Foldout(_foldouts[foldoutId], stateName, true);
+            GUILayout.FlexibleSpace(); // Add flexible space to push checkbox and button to the right
+            DrawInitialStateCheckbox(index, stateProperty);
 
             if (GUILayout.Button("Remove", GUILayout.Width(60)))
             {
                 RemoveState(index);
                 return;
             }
-            
+
             EditorGUILayout.EndHorizontal();
-            
+
             EditorGUILayout.Space();
 
             if (_foldouts[foldoutId])
@@ -93,14 +95,39 @@ namespace VolumeBox.Gearbox.Editor
                 // State instance properties
                 DrawStateInstanceProperties(stateProperty);
 
-                // Transitions
-                EditorGUILayout.LabelField("Transitions", EditorStyles.boldLabel);
-                DrawTransitionsList(transitionsProperty);
-
-                EditorGUI.indentLevel--;
             }
+            
+            EditorGUI.indentLevel--;
 
             EditorGUILayout.EndVertical();
+        }
+
+        private void DrawInitialStateCheckbox(int index, SerializedProperty stateProperty)
+        {
+            var isInitialStateProperty = stateProperty.FindPropertyRelative("IsInitialState");
+            var sm = (StateMachine)target;
+
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.LabelField("Initial State", EditorStyles.boldLabel, GUILayout.Width(85));
+            var newValue = EditorGUILayout.Toggle(isInitialStateProperty.boolValue, GUILayout.Width(32));
+            
+            if (!EditorGUI.EndChangeCheck()) return;
+            
+            // If enabling this checkbox, disable all others
+            if (newValue)
+            {
+                for (int i = 0; i < sm.States.Count; i++)
+                {
+                    if (i == index) continue;
+                    
+                    var otherStateProperty = _statesProperty.GetArrayElementAtIndex(i);
+                    var otherIsInitialProperty = otherStateProperty.FindPropertyRelative("IsInitialState");
+                    otherIsInitialProperty.boolValue = false;
+                }
+            }
+            
+            isInitialStateProperty.boolValue = newValue;
+            serializedObject.ApplyModifiedProperties();
         }
 
         private void DrawStateTypeDropdown(SerializedProperty stateProperty)
@@ -158,13 +185,15 @@ namespace VolumeBox.Gearbox.Editor
                 var fields = stateType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 foreach (var field in fields)
                 {
-                    if (field.IsPublic || field.GetCustomAttributes(typeof(SerializeField), true).Length > 0)
+                    if (!field.IsPublic && field.GetCustomAttributes(typeof(SerializeField), true).Length <= 0)
                     {
-                        var fieldProperty = instanceProperty.FindPropertyRelative(field.Name);
-                        if (fieldProperty != null)
-                        {
-                            EditorGUILayout.PropertyField(fieldProperty, new GUIContent(ObjectNames.NicifyVariableName(field.Name)), true);
-                        }
+                        continue;
+                    }
+                    
+                    var fieldProperty = instanceProperty.FindPropertyRelative(field.Name);
+                    if (fieldProperty != null)
+                    {
+                        EditorGUILayout.PropertyField(fieldProperty, new GUIContent(ObjectNames.NicifyVariableName(field.Name)), true);
                     }
                 }
             }
@@ -189,52 +218,21 @@ namespace VolumeBox.Gearbox.Editor
             }
         }
 
-        private void DrawTransitionsList(SerializedProperty transitionsProperty)
-        {
-            var sm = (StateMachine)target;
-            var stateNames = sm.States.Select(s => string.IsNullOrEmpty(s.Name) ? "Unnamed" : s.Name).ToArray();
-
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("Available States", EditorStyles.miniBoldLabel);
-
-            for (int i = 0; i < transitionsProperty.arraySize; i++)
-            {
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField($"Transition {i + 1}", GUILayout.Width(80));
-
-                var transitionProperty = transitionsProperty.GetArrayElementAtIndex(i);
-                var currentValue = transitionProperty.stringValue;
-                var currentIndex = Array.IndexOf(stateNames, currentValue);
-
-                EditorGUI.BeginChangeCheck();
-                var newIndex = EditorGUILayout.Popup(currentIndex, stateNames);
-                if (EditorGUI.EndChangeCheck() && newIndex >= 0 && newIndex < stateNames.Length)
-                {
-                    transitionProperty.stringValue = stateNames[newIndex];
-                }
-
-                if (GUILayout.Button("X", GUILayout.Width(20)))
-                {
-                    transitionsProperty.DeleteArrayElementAtIndex(i);
-                    break; // Exit loop to avoid index issues
-                }
-                EditorGUILayout.EndHorizontal();
-            }
-
-            if (GUILayout.Button("Add Transition"))
-            {
-                transitionsProperty.InsertArrayElementAtIndex(transitionsProperty.arraySize);
-            }
-
-            EditorGUILayout.EndVertical();
-        }
 
         private void AddNewState()
         {
+            var sm = (StateMachine)target;
             _statesProperty.InsertArrayElementAtIndex(_statesProperty.arraySize);
             var newElement = _statesProperty.GetArrayElementAtIndex(_statesProperty.arraySize - 1);
             newElement.FindPropertyRelative("Name").stringValue = $"State {_statesProperty.arraySize}";
             newElement.FindPropertyRelative("StateTypeName").stringValue = "";
+
+            // If this is the first state, make it initial by default
+            if (sm.States.Count == 1)
+            {
+                newElement.FindPropertyRelative("IsInitialState").boolValue = true;
+            }
+
             serializedObject.ApplyModifiedProperties();
         }
 
