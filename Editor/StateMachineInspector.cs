@@ -11,39 +11,42 @@ namespace VolumeBox.Gearbox.Editor
     [CustomEditor(typeof(StateMachine))]
     public class StateMachineInspector : UnityEditor.Editor
     {
-        private readonly Dictionary<string, bool> _foldouts = new Dictionary<string, bool>();
+        private readonly Dictionary<string, bool> _foldouts = new();
+        private SerializedProperty _statesProperty;
+        private SerializedProperty _initializeOnStartProperty;
+
+        private void OnEnable()
+        {
+            _statesProperty = serializedObject.FindProperty("_states");
+            _initializeOnStartProperty = serializedObject.FindProperty("_initializeOnStart");
+        }
 
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
 
-            var statesProperty = serializedObject.FindProperty("_states");
-            var initializeOnStartProperty = serializedObject.FindProperty("_initializeOnStart");
-
             GUILayout.Space(8);
-            if (initializeOnStartProperty != null)
+            
+            if (_initializeOnStartProperty != null)
             {
-                initializeOnStartProperty.boolValue = EditorGUILayout.Toggle("Initialize On Start", initializeOnStartProperty.boolValue);
+                _initializeOnStartProperty.boolValue = EditorGUILayout.Toggle("Initialize On Start", _initializeOnStartProperty.boolValue);
             }
+            
             EditorGUILayout.LabelField("States", EditorStyles.boldLabel);
 
-            // Add State button
             if (GUILayout.Button("Add State"))
             {
-                if (statesProperty != null)
-                {
-                    AddNewState(statesProperty);
-                }
+                AddNewState(_statesProperty);
             }
 
             EditorGUILayout.Space();
 
-            if (statesProperty != null)
+            if (_statesProperty != null)
             {
-                for (int i = 0; i < statesProperty.arraySize; i++)
+                for (int i = 0; i < _statesProperty.arraySize; i++)
                 {
-                    DrawStateElement(statesProperty, i);
-                } 
+                    DrawStateElement(_statesProperty, i);
+                }
             }
 
             if (serializedObject.hasModifiedProperties)
@@ -56,10 +59,8 @@ namespace VolumeBox.Gearbox.Editor
         {
             var stateProperty = statesProperty.GetArrayElementAtIndex(index);
             var nameProperty = stateProperty.FindPropertyRelative("Name");
-            stateProperty.FindPropertyRelative("StateTypeName");
 
             var foldoutId = $"state_{index}";
-            
             _foldouts.TryAdd(foldoutId, true);
 
             var stateName = string.IsNullOrEmpty(nameProperty.stringValue) ? $"State {index + 1}" : nameProperty.stringValue;
@@ -103,6 +104,7 @@ namespace VolumeBox.Gearbox.Editor
         private void DrawInitialStateCheckbox(SerializedProperty statesProperty, int index, SerializedProperty stateProperty)
         {
             var isInitialStateProperty = stateProperty.FindPropertyRelative("IsInitialState");
+            if (isInitialStateProperty == null) return;
 
             EditorGUI.BeginChangeCheck();
             EditorGUILayout.LabelField("Initial State", EditorStyles.boldLabel, GUILayout.Width(85));
@@ -111,16 +113,16 @@ namespace VolumeBox.Gearbox.Editor
             if (!EditorGUI.EndChangeCheck()) return;
             
             // If enabling this checkbox, disable all others
-            if (newValue)
+            if (newValue && statesProperty != null)
             {
-                if (statesProperty != null)
+                for (int i = 0; i < statesProperty.arraySize; i++)
                 {
-                    for (int i = 0; i < statesProperty.arraySize; i++)
-                    {
-                        if (i == index) continue;
+                    if (i == index) continue;
 
-                        var otherStateProperty = statesProperty.GetArrayElementAtIndex(i);
-                        var otherIsInitialProperty = otherStateProperty.FindPropertyRelative("IsInitialState");
+                    var otherStateProperty = statesProperty.GetArrayElementAtIndex(i);
+                    var otherIsInitialProperty = otherStateProperty?.FindPropertyRelative("IsInitialState");
+                    if (otherIsInitialProperty != null)
+                    {
                         otherIsInitialProperty.boolValue = false;
                     }
                 }
@@ -221,24 +223,36 @@ namespace VolumeBox.Gearbox.Editor
 
         private void AddNewState(SerializedProperty statesProperty)
         {
+            if (statesProperty == null) return;
+
             statesProperty.InsertArrayElementAtIndex(statesProperty.arraySize);
             var newElementIndex = statesProperty.arraySize - 1;
             var newElement = statesProperty.GetArrayElementAtIndex(newElementIndex);
-            newElement.FindPropertyRelative("Name").stringValue = $"State {statesProperty.arraySize}";
-            newElement.FindPropertyRelative("StateTypeName").stringValue = "";
+            
+            var nameProperty = newElement.FindPropertyRelative("Name");
+            var typeNameProperty = newElement.FindPropertyRelative("StateTypeName");
+            var isInitialProperty = newElement.FindPropertyRelative("IsInitialState");
 
-            var newIsInitialProperty = newElement.FindPropertyRelative("IsInitialState");
-            var hasInitialState = HasInitialState(statesProperty, newElementIndex);
-            newIsInitialProperty.boolValue = !hasInitialState;
-
-            // Ensure only one initial state exists
-            if (!hasInitialState)
+            if (nameProperty != null)
             {
-                SetInitialState(statesProperty, newElementIndex);
+                nameProperty.stringValue = $"State {statesProperty.arraySize}";
             }
-            else
+
+            if (typeNameProperty != null)
             {
-                newIsInitialProperty.boolValue = false;
+                typeNameProperty.stringValue = "";
+            }
+
+            if (isInitialProperty != null)
+            {
+                var hasInitialState = HasInitialState(statesProperty, newElementIndex);
+                isInitialProperty.boolValue = !hasInitialState;
+
+                // Ensure only one initial state exists
+                if (!hasInitialState)
+                {
+                    SetInitialState(statesProperty, newElementIndex);
+                }
             }
 
             serializedObject.ApplyModifiedProperties();
@@ -275,11 +289,6 @@ namespace VolumeBox.Gearbox.Editor
         {
             statesProperty.DeleteArrayElementAtIndex(index);
             serializedObject.ApplyModifiedProperties();
-        }
-
-        private Type[] GetStateDefinitionTypes()
-        {
-            return GearboxTypeCache.GetStateDefinitionTypes();
         }
     }
 }

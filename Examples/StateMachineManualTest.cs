@@ -1,3 +1,4 @@
+using System.Linq;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using VolumeBox.Gearbox.Core;
@@ -57,7 +58,7 @@ namespace VolumeBox.Gearbox.Tests
             // Random transition to any state
             if (Input.GetKeyDown(_randomTransitionKey))
             {
-                var validStates = _stateMachine.States.FindAll(s => s.Instance != null).ToArray();
+                var validStates = _stateMachine.States.Where(s => s.Instance != null).ToArray();
                 if (validStates.Length > 0)
                 {
                     var randomState = validStates[Random.Range(0, validStates.Length)].Instance;
@@ -82,8 +83,8 @@ namespace VolumeBox.Gearbox.Tests
             if (_stateMachine.States.Count > 0)
             {
                 GUI.Label(new Rect(10, 50, 300, 20), "Available States:");
-                var validStates = _stateMachine.States.FindAll(s => s.Instance != null);
-                for (int i = 0; i < validStates.Count && i < 5; i++)
+                var validStates = _stateMachine.States.Where(s => s.Instance != null).Take(5).ToArray();
+                for (int i = 0; i < validStates.Length; i++)
                 {
                     GUI.Label(new Rect(10, 70 + i * 20, 200, 20), $"- {validStates[i].Instance.GetType().Name}");
                 }

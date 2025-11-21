@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using UnityEditor.IMGUI.Controls;
-using VolumeBox.Gearbox.Core;
 
 namespace VolumeBox.Gearbox.Editor
 {
@@ -78,10 +76,7 @@ namespace VolumeBox.Gearbox.Editor
         protected override void ItemSelected(AdvancedDropdownItem item)
         {
             var selectedType = _stateTypes.FirstOrDefault(t => t.Type.GetHashCode() == item.id)?.Type;
-            if (selectedType != null)
-            {
-                _onTypeSelected(selectedType);
-            }
+            _onTypeSelected?.Invoke(selectedType);
         }
     }
 }

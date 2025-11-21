@@ -1,6 +1,5 @@
 using UnityEditor;
 using UnityEngine;
-using System.Linq;
 
 namespace VolumeBox.Gearbox.Editor
 {
@@ -18,7 +17,7 @@ namespace VolumeBox.Gearbox.Editor
         private void OnEnable()
         {
             _serializedPreferences = new SerializedObject(GearboxPreferences.Instance);
-            _assemblyDefinitionsProperty = _serializedPreferences.FindProperty("assemblyDefinitions");
+            _assemblyDefinitionsProperty = _serializedPreferences.FindProperty("_assemblyDefinitions");
         }
 
         public void DrawGUI()
@@ -42,10 +41,9 @@ namespace VolumeBox.Gearbox.Editor
 
     public class GearboxPreferencesProvider : SettingsProvider
     {
-        private GearboxPreferencesWindow _preferencesWindow;
+        private readonly GearboxPreferencesWindow _preferencesWindow;
 
-        public GearboxPreferencesProvider(string path, SettingsScope scopes, System.Collections.Generic.IEnumerable<string> keywords = null)
-            : base(path, scopes, keywords)
+        private GearboxPreferencesProvider(string path, SettingsScope scopes, System.Collections.Generic.IEnumerable<string> keywords = null) : base(path, scopes, keywords)
         {
             _preferencesWindow = ScriptableObject.CreateInstance<GearboxPreferencesWindow>();
         }

@@ -2,7 +2,7 @@ using System;
 
 namespace VolumeBox.Gearbox.Core
 {
-    [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
+    [AttributeUsage(AttributeTargets.Class, Inherited = false)]
     public class StateCategoryAttribute : Attribute
     {
         public string CategoryPath { get; }

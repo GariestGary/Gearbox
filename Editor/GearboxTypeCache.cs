@@ -9,7 +9,7 @@ namespace VolumeBox.Gearbox.Editor
 {
     public static class GearboxTypeCache
     {
-        private static Dictionary<string, Type[]> _cachedTypes = new Dictionary<string, Type[]>();
+        private static readonly Dictionary<string, Type[]> _cachedTypes = new();
         private static DateTime _lastCacheUpdate = DateTime.MinValue;
 
         public class StateTypeInfo
@@ -22,7 +22,7 @@ namespace VolumeBox.Gearbox.Editor
             {
                 Type = type;
                 CategoryPath = categoryPath ?? "";
-                CategoryParts = string.IsNullOrEmpty(CategoryPath) ? new string[0] : CategoryPath.Split('/');
+                CategoryParts = string.IsNullOrEmpty(CategoryPath) ? Array.Empty<string>() : CategoryPath.Split('/');
             }
         }
 

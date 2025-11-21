@@ -23,12 +23,12 @@ namespace VolumeBox.Gearbox.Core
         /// </summary>
         protected GameObject gameObject => StateMachine?.gameObject;
 
-        public virtual UniTask OnEnter()
+        public virtual UniTask OnEnter(StateDefinition fromState = null, object data = null)
         {
             return UniTask.CompletedTask;
         }
 
-        public virtual UniTask OnExit()
+        public virtual UniTask OnExit(StateDefinition toState = null)
         {
             return UniTask.CompletedTask;
         }
@@ -63,7 +63,3 @@ namespace VolumeBox.Gearbox.Core
         }
     }
 }
-
-
-
-

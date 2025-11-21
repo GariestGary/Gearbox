@@ -12,9 +12,17 @@ namespace VolumeBox.Gearbox.Examples
         [SerializeField] private float idleTime = 2.0f;
         [SerializeField] private Color idleColor = Color.blue;
 
-        public override async UniTask OnEnter()
+        public override async UniTask OnEnter(StateDefinition fromState, object data)
         {
-            Debug.Log($"Entering Idle state for {idleTime} seconds");
+            if (fromState != null)
+            {
+                Debug.Log($"Entering Idle state from {fromState.GetType().Name} for {idleTime} seconds");
+            }
+            else
+            {
+                Debug.Log($"Entering Idle state (initial) for {idleTime} seconds");
+            }
+            
             var renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -29,9 +37,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit()
+        public override async UniTask OnExit(StateDefinition toState)
         {
-            Debug.Log("Exiting Idle state");
+            if (toState != null)
+            {
+                Debug.Log($"Exiting Idle state, transitioning to {toState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Exiting Idle state");
+            }
             await UniTask.CompletedTask;
         }
     }
@@ -48,9 +63,28 @@ namespace VolumeBox.Gearbox.Examples
         private float journeyLength;
         private float startTime;
 
-        public override async UniTask OnEnter()
+        public override async UniTask OnEnter(StateDefinition fromState, object data)
         {
-            Debug.Log($"Moving to position {targetPosition}");
+            // Check if custom target position was passed via data
+            if (data is Vector3 customTarget)
+            {
+                targetPosition = customTarget;
+                Debug.Log($"Moving to custom position {targetPosition} (from data)");
+            }
+            else if (data != null)
+            {
+                Debug.Log($"Received data: {data}");
+            }
+            
+            if (fromState != null)
+            {
+                Debug.Log($"Moving to position {targetPosition} from {fromState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log($"Moving to position {targetPosition}");
+            }
+            
             var renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -73,9 +107,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit()
+        public override async UniTask OnExit(StateDefinition toState)
         {
-            Debug.Log("Finished moving");
+            if (toState != null)
+            {
+                Debug.Log($"Finished moving, transitioning to {toState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Finished moving");
+            }
             await UniTask.CompletedTask;
         }
     }
@@ -90,9 +131,23 @@ namespace VolumeBox.Gearbox.Examples
 
         private float lastAttackTime;
 
-        public override async UniTask OnEnter()
+        public override async UniTask OnEnter(StateDefinition fromState, object data)
         {
-            Debug.Log($"Starting attack with {attackDamage} damage");
+            // Check if damage was modified via data
+            if (data is float customDamage && customDamage > 0)
+            {
+                attackDamage = customDamage;
+                Debug.Log($"Starting attack with custom damage {attackDamage} (from data)");
+            }
+            else if (fromState != null)
+            {
+                Debug.Log($"Starting attack with {attackDamage} damage from {fromState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log($"Starting attack with {attackDamage} damage");
+            }
+            
             var renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -114,9 +169,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit()
+        public override async UniTask OnExit(StateDefinition toState)
         {
-            Debug.Log("Stopping attack");
+            if (toState != null)
+            {
+                Debug.Log($"Stopping attack, transitioning to {toState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Stopping attack");
+            }
             await UniTask.CompletedTask;
         }
     }
@@ -132,9 +194,17 @@ namespace VolumeBox.Gearbox.Examples
 
         private int currentWaypointIndex = 0;
 
-        public override async UniTask OnEnter()
+        public override async UniTask OnEnter(StateDefinition fromState, object data)
         {
-            Debug.Log("Starting patrol");
+            if (fromState != null)
+            {
+                Debug.Log($"Starting patrol from {fromState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Starting patrol");
+            }
+            
             var renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -168,9 +238,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit()
+        public override async UniTask OnExit(StateDefinition toState)
         {
-            Debug.Log("Stopping patrol");
+            if (toState != null)
+            {
+                Debug.Log($"Stopping patrol, transitioning to {toState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Stopping patrol");
+            }
             await UniTask.CompletedTask;
         }
     }
@@ -184,9 +261,17 @@ namespace VolumeBox.Gearbox.Examples
         [SerializeField] private float fleeSpeed = 3.0f;
         [SerializeField] private Color fleeColor = Color.magenta;
 
-        public override async UniTask OnEnter()
+        public override async UniTask OnEnter(StateDefinition fromState, object data)
         {
-            Debug.Log("Starting to flee!");
+            if (fromState != null)
+            {
+                Debug.Log($"Starting to flee from {fromState.GetType().Name}!");
+            }
+            else
+            {
+                Debug.Log("Starting to flee!");
+            }
+            
             var renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -212,9 +297,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit()
+        public override async UniTask OnExit(StateDefinition toState)
         {
-            Debug.Log("Stopped fleeing");
+            if (toState != null)
+            {
+                Debug.Log($"Stopped fleeing, transitioning to {toState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Stopped fleeing");
+            }
             await UniTask.CompletedTask;
         }
     }
@@ -226,9 +318,17 @@ namespace VolumeBox.Gearbox.Examples
         [SerializeField] private Vector3 rotationAxis = Vector3.up;
         [SerializeField] private Color rotateColor = Color.cyan;
 
-        public override async UniTask OnEnter()
+        public override async UniTask OnEnter(StateDefinition fromState, object data)
         {
-            Debug.Log("Starting rotation");
+            if (fromState != null)
+            {
+                Debug.Log($"Starting rotation from {fromState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Starting rotation");
+            }
+            
             var renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -243,9 +343,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit()
+        public override async UniTask OnExit(StateDefinition toState)
         {
-            Debug.Log("Stopping rotation");
+            if (toState != null)
+            {
+                Debug.Log($"Stopping rotation, transitioning to {toState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Stopping rotation");
+            }
             await UniTask.CompletedTask;
         }
     }
@@ -260,9 +367,17 @@ namespace VolumeBox.Gearbox.Examples
         private float lastJumpTime;
         private Rigidbody rb;
 
-        public override async UniTask OnEnter()
+        public override async UniTask OnEnter(StateDefinition fromState, object data)
         {
-            Debug.Log("Preparing to jump");
+            if (fromState != null)
+            {
+                Debug.Log($"Preparing to jump from {fromState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Preparing to jump");
+            }
+            
             var renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -291,9 +406,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit()
+        public override async UniTask OnExit(StateDefinition toState)
         {
-            Debug.Log("Finished jumping");
+            if (toState != null)
+            {
+                Debug.Log($"Finished jumping, transitioning to {toState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Finished jumping");
+            }
             await UniTask.CompletedTask;
         }
     }
@@ -308,9 +430,23 @@ namespace VolumeBox.Gearbox.Examples
 
         private Vector3 lastKnownPosition;
 
-        public override async UniTask OnEnter()
+        public override async UniTask OnEnter(StateDefinition fromState, object data)
         {
-            Debug.Log("Starting chase");
+            // Check if target was passed via data
+            if (data is Transform targetTransform)
+            {
+                chaseTarget = targetTransform;
+                Debug.Log($"Starting chase with target from data");
+            }
+            else if (fromState != null)
+            {
+                Debug.Log($"Starting chase from {fromState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Starting chase");
+            }
+            
             var renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -352,9 +488,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit()
+        public override async UniTask OnExit(StateDefinition toState)
         {
-            Debug.Log("Stopping chase");
+            if (toState != null)
+            {
+                Debug.Log($"Stopping chase, transitioning to {toState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Stopping chase");
+            }
             await UniTask.CompletedTask;
         }
     }
@@ -365,9 +508,17 @@ namespace VolumeBox.Gearbox.Examples
         [SerializeField] private KeyCode activationKey = KeyCode.Space;
         [SerializeField] private Color waitingColor = Color.gray;
 
-        public override async UniTask OnEnter()
+        public override async UniTask OnEnter(StateDefinition fromState, object data)
         {
-            Debug.Log($"Waiting for key press: {activationKey}");
+            if (fromState != null)
+            {
+                Debug.Log($"Waiting for key press: {activationKey} (from {fromState.GetType().Name})");
+            }
+            else
+            {
+                Debug.Log($"Waiting for key press: {activationKey}");
+            }
+            
             var renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -387,9 +538,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit()
+        public override async UniTask OnExit(StateDefinition toState)
         {
-            Debug.Log("Input received, exiting wait state");
+            if (toState != null)
+            {
+                Debug.Log($"Input received, exiting wait state, transitioning to {toState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Input received, exiting wait state");
+            }
             await UniTask.CompletedTask;
         }
     }
@@ -403,9 +561,17 @@ namespace VolumeBox.Gearbox.Examples
 
         private Vector3 originalScale;
 
-        public override async UniTask OnEnter()
+        public override async UniTask OnEnter(StateDefinition fromState, object data)
         {
-            Debug.Log("Starting scale animation");
+            if (fromState != null)
+            {
+                Debug.Log($"Starting scale animation from {fromState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Starting scale animation");
+            }
+            
             var renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
@@ -422,11 +588,19 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit()
+        public override async UniTask OnExit(StateDefinition toState)
         {
-            Debug.Log("Finished scaling");
+            if (toState != null)
+            {
+                Debug.Log($"Finished scaling, transitioning to {toState.GetType().Name}");
+            }
+            else
+            {
+                Debug.Log("Finished scaling");
+            }
             // Optionally reset scale: transform.localScale = originalScale;
             await UniTask.CompletedTask;
         }
     }
 }
+
