@@ -51,7 +51,7 @@ namespace VolumeBox.Gearbox.Core
             // Instantiate state instances
             foreach (var stateData in _states)
             {
-                await InitializeStateData(stateData);
+                InitializeStateData(stateData);
             }
 
             // Set initial state if available
@@ -66,7 +66,7 @@ namespace VolumeBox.Gearbox.Core
             }
         }
 
-        private async UniTask InitializeStateData(StateData stateData)
+        private void InitializeStateData(StateData stateData)
         {
             var stateType = stateData.GetStateType();
             if (stateType == null) return;
@@ -74,10 +74,7 @@ namespace VolumeBox.Gearbox.Core
             try
             {
                 // Use existing instance if available (created in editor), otherwise create new one
-                if (stateData.Instance == null)
-                {
-                    stateData.Instance = (StateDefinition)Activator.CreateInstance(stateType);
-                }
+                stateData.Instance ??= (StateDefinition)Activator.CreateInstance(stateType);
 
                 stateData.Instance.StateMachine = this;
                 _stateInitializeAction?.Invoke(stateData.Instance);
@@ -153,9 +150,9 @@ namespace VolumeBox.Gearbox.Core
         /// Transitions to the first state of the specified type.
         /// </summary>
         /// <typeparam name="T">Type of state to transition to</typeparam>
-        public async UniTask TransitionToState<T>() where T : StateDefinition
+        public async UniTask TransitionToState<T>(object data = null) where T : StateDefinition
         {
-            await TransitionToState<T>(null, null);
+            await TransitionToState<T>(null, data);
         }
 
         /// <summary>
@@ -164,22 +161,13 @@ namespace VolumeBox.Gearbox.Core
         /// <typeparam name="T">Type of state to transition to</typeparam>
         /// <param name="stateName">Optional name filter. If null, selects the first state of type T</param>
         /// <param name="data">Optional data to pass to the OnEnter method</param>
-        public async UniTask TransitionToState<T>(string stateName = null, object data = null) where T : StateDefinition
+        public async UniTask TransitionToState<T>(string stateName, object data = null) where T : StateDefinition
         {
-            StateData stateData = null;
+            var stateData = string.IsNullOrEmpty(stateName) 
+                ? _states.Find(s => s.Instance != null && s.Instance.GetType() == typeof(T)) 
+                : _states.Find(s => s.Instance != null && s.Instance.GetType() == typeof(T) && s.Name == stateName);
 
-            if (string.IsNullOrEmpty(stateName))
-            {
-                // Find first state of the specified type
-                stateData = _states.Find(s => s.Instance != null && s.Instance.GetType() == typeof(T));
-            }
-            else
-            {
-                // Find state by type and name
-                stateData = _states.Find(s => s.Instance != null && s.Instance.GetType() == typeof(T) && s.Name == stateName);
-            }
-
-            if (stateData == null || stateData.Instance == null)
+            if (stateData?.Instance == null)
             {
                 var typeName = typeof(T).Name;
                 var namePart = string.IsNullOrEmpty(stateName) ? "" : $" with name '{stateName}'";
@@ -188,6 +176,17 @@ namespace VolumeBox.Gearbox.Core
             }
 
             await PerformTransition(stateData.Instance, data);
+        }
+
+        /// <summary>
+        /// Transitions to a state of the specified type from within a state context.
+        /// This method automatically infers the target state type from the calling context.
+        /// </summary>
+        /// <typeparam name="T">Type of state to transition to (automatically inferred)</typeparam>
+        /// <param name="data">Optional data to pass to the OnEnter method</param>
+        public async UniTask TransitionTo<T>(object data = null) where T : StateDefinition
+        {
+            await TransitionToState<T>(null, data);
         }
 
         /// <summary>

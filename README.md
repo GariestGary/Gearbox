@@ -134,6 +134,8 @@ var transitions = stateMachine.GetAvailableTransitions(currentState);
 | `InitializeStateMachine()` | Initialize state instances and set initial state |
 | `TransitionToState(string)` | Transition to state by name |
 | `TransitionToState(StateDefinition)` | Transition to specific state instance |
+| `TransitionToState<T>()` | Transition to state by type (generic) |
+| `TransitionTo<T>()` | Transition to state by type (generic, inferred) |
 | `TriggerTransition(StateDefinition, int)` | Trigger transition by index from current state |
 | `GetAvailableTransitions(StateDefinition)` | Get list of available transition names |
 
@@ -145,6 +147,7 @@ var transitions = stateMachine.GetAvailableTransitions(currentState);
 | `transform` | Shortcut to StateMachine.transform |
 | `gameObject` | Shortcut to StateMachine.gameObject |
 | `GetComponent<T>()` | Get component from StateMachine GameObject |
+| `TransitionTo<T>()` | Transition to state by type from within state (generic, inferred) |
 | `OnEnter()` | Called when entering state (async) |
 | `OnUpdate()` | Called every frame while active (async) |
 | `OnExit()` | Called when exiting state (async) |
@@ -360,6 +363,41 @@ public class TimedState : StateDefinition
             await StateMachine.TransitionToState("NextState");
         }
     }
+    
+    ### Generic Transition Methods
+    
+    The new generic transition methods allow you to transition to states without explicitly specifying state names, using type inference instead:
+    
+    ```csharp
+    public class AIState : StateDefinition
+    {
+        public override async UniTask OnUpdate()
+        {
+            // Old way - requires explicit type specification
+            await StateMachine.TransitionToState<MoveState>();
+            
+            // New way - type is automatically inferred from generic parameter
+            await TransitionTo<MoveState>();
+            
+            // With data parameter
+            await TransitionTo<AttackState>(customDamage: 25f);
+            
+            // With name filter
+            await TransitionTo<IdleState>("SpecialIdle");
+        }
+    }
+    
+    // External transitions (from outside states)
+    var stateMachine = GetComponent<StateMachine>();
+    await stateMachine.TransitionTo<MoveState>();
+    await stateMachine.TransitionTo<AttackState>(customTarget);
+    ```
+    
+    **Benefits:**
+    - **Type Safety**: Compile-time checking of state types
+    - **IntelliSense**: Full IDE support with autocomplete
+    - **Refactoring**: Rename states safely with automatic updates
+    - **Readability**: Clear intent without string literals
 }
 ```
 

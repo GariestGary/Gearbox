@@ -61,5 +61,6 @@ namespace VolumeBox.Gearbox.Core
         {
             return StateMachine?.GetComponentInParent<T>();
         }
+        
     }
 }

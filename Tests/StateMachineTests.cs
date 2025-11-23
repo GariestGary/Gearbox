@@ -565,5 +565,113 @@ namespace VolumeBox.Gearbox.Tests
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error, "State 'NonExistentState' not found or not initialized.");
             Assert.DoesNotThrow(() => _stateMachine.TransitionToState("NonExistentState"));
         }
+
+        [UnityTest]
+        public IEnumerator StateMachine_TransitionToGenericMethod()
+        {
+            // Setup states
+            var idleState = new StateData
+            {
+                Name = "Idle",
+                StateTypeName = typeof(IdleState).AssemblyQualifiedName
+            };
+            var moveState = new StateData
+            {
+                Name = "Move",
+                StateTypeName = typeof(MoveState).AssemblyQualifiedName
+            };
+
+            _stateMachine.States.Add(idleState);
+            _stateMachine.States.Add(moveState);
+
+            // Initialize
+            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+
+            // Test the new generic transition method
+            yield return _stateMachine.TransitionTo<MoveState>().ToCoroutine();
+
+            Assert.AreEqual(typeof(MoveState), _stateMachine.CurrentState.GetType());
+        }
+
+        [UnityTest]
+        public IEnumerator StateMachine_TransitionToGenericMethodWithData()
+        {
+            // Setup states
+            var moveState = new StateData
+            {
+                Name = "Move",
+                StateTypeName = typeof(MoveState).AssemblyQualifiedName
+            };
+
+            _stateMachine.States.Add(moveState);
+
+            // Initialize
+            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+
+            // Test the new generic transition method with data
+            var customTarget = new Vector3(15, 0, 15);
+            yield return _stateMachine.TransitionTo<MoveState>(customTarget).ToCoroutine();
+
+            Assert.AreEqual(typeof(MoveState), _stateMachine.CurrentState.GetType());
+        }
+
+        [UnityTest]
+        public IEnumerator StateMachine_TransitionToGenericMethodWithName()
+        {
+            // Setup multiple states of same type with different names
+            var idleState1 = new StateData
+            {
+                Name = "Idle1",
+                StateTypeName = typeof(IdleState).AssemblyQualifiedName
+            };
+            var idleState2 = new StateData
+            {
+                Name = "Idle2",
+                StateTypeName = typeof(IdleState).AssemblyQualifiedName
+            };
+
+            _stateMachine.States.Add(idleState1);
+            _stateMachine.States.Add(idleState2);
+
+            // Initialize
+            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+
+            // Test the new generic transition method with name
+            yield return _stateMachine.TransitionTo<IdleState>("Idle2").ToCoroutine();
+
+            Assert.AreEqual(typeof(IdleState), _stateMachine.CurrentState.GetType());
+            Assert.AreEqual("Idle2", _stateMachine.States.Find(s => s.Instance == _stateMachine.CurrentState).Name);
+        }
+
+        [UnityTest]
+        public IEnumerator StateDefinition_TransitionToGenericMethod()
+        {
+            // Setup states
+            var idleState = new StateData
+            {
+                Name = "Idle",
+                StateTypeName = typeof(IdleState).AssemblyQualifiedName
+            };
+            var moveState = new StateData
+            {
+                Name = "Move",
+                StateTypeName = typeof(MoveState).AssemblyQualifiedName
+            };
+
+            _stateMachine.States.Add(idleState);
+            _stateMachine.States.Add(moveState);
+
+            // Initialize
+            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+
+            // Test the StateDefinition's TransitionTo method
+            var currentState = _stateMachine.CurrentState as IdleState;
+            Assert.IsNotNull(currentState);
+
+            // This simulates calling TransitionTo from within a state
+            yield return _stateMachine.TransitionTo<MoveState>().ToCoroutine();
+
+            Assert.AreEqual(typeof(MoveState), _stateMachine.CurrentState.GetType());
+        }
     }
 }
