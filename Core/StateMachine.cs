@@ -13,10 +13,10 @@ namespace VolumeBox.Gearbox.Core
     {
         [SerializeField] private List<StateData> _states = new();
         [SerializeField] private bool _initializeOnStart = true;
+        [SerializeReference] private StateDefinition _initialState;
 
         private Action<StateDefinition> _stateInitializeAction;
         private List<StateDefinition> _initializedStates = new();
-        private StateDefinition _initialState;
 
         /// <summary>
         /// List of all configured states in this state machine.
@@ -61,10 +61,11 @@ namespace VolumeBox.Gearbox.Core
                 return;
             }
             
-            _initialState ??= _initializedStates[0];
+            // Use serialized initial state or fallback to first state
+            var initialState = _initialState ?? _initializedStates[0];
 
             // Set initial state if available
-            await EnterState(_initialState);
+            await EnterState(initialState);
         }
 
         public void SetInitialState(StateDefinition state)
@@ -74,7 +75,7 @@ namespace VolumeBox.Gearbox.Core
                 return;
             }
             
-            _initialState =  state;
+            _initialState = state;
         }
 
         private void InitializeStateData(StateData stateData)
