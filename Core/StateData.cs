@@ -7,9 +7,7 @@ namespace VolumeBox.Gearbox.Core
     [Serializable]
     public class StateData
     {
-        public string Name;
         public string StateTypeName;
-        public bool IsInitialState;
 
         [SerializeReference] public StateDefinition Instance;
 

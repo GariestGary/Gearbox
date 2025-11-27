@@ -7,6 +7,8 @@ namespace VolumeBox.Gearbox.Core
     [Serializable]
     public abstract class StateDefinition
     {
+        public string Name { get; set; }
+        
         /// <summary>
         /// Reference to the StateMachine component that owns this state.
         /// Use this to access transform, GetComponent, etc.

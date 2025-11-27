@@ -46,7 +46,7 @@ namespace VolumeBox.Gearbox.Tests
             if (Input.GetKeyDown(_transitionKey))
             {
                 _currentTransitionIndex = (_currentTransitionIndex + 1) % _stateMachine.States.Count;
-                var targetState = _stateMachine.States[_currentTransitionIndex].Instance;
+                var targetState = _stateMachine.States[_currentTransitionIndex];
                 if (targetState != null)
                 {
                     Debug.Log($"Transitioning to: {targetState.GetType().Name}");
@@ -58,10 +58,10 @@ namespace VolumeBox.Gearbox.Tests
             // Random transition to any state
             if (Input.GetKeyDown(_randomTransitionKey))
             {
-                var validStates = _stateMachine.States.Where(s => s.Instance != null).ToArray();
+                var validStates = _stateMachine.States.Where(s => s != null).ToArray();
                 if (validStates.Length > 0)
                 {
-                    var randomState = validStates[Random.Range(0, validStates.Length)].Instance;
+                    var randomState = validStates[Random.Range(0, validStates.Length)];
                     Debug.Log($"Random transition to: {randomState.GetType().Name}");
                     _stateMachine.TransitionToState(randomState);
                     Debug.Log($"Current state: {_stateMachine.CurrentState?.GetType().Name ?? "None"}");
@@ -83,10 +83,10 @@ namespace VolumeBox.Gearbox.Tests
             if (_stateMachine.States.Count > 0)
             {
                 GUI.Label(new Rect(10, 50, 300, 20), "Available States:");
-                var validStates = _stateMachine.States.Where(s => s.Instance != null).Take(5).ToArray();
+                var validStates = _stateMachine.States.Where(s => s != null).Take(5).ToArray();
                 for (int i = 0; i < validStates.Length; i++)
                 {
-                    GUI.Label(new Rect(10, 70 + i * 20, 200, 20), $"- {validStates[i].Instance.GetType().Name}");
+                    GUI.Label(new Rect(10, 70 + i * 20, 200, 20), $"- {validStates[i].GetType().Name}");
                 }
             }
 

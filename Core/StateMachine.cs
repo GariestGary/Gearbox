@@ -15,11 +15,13 @@ namespace VolumeBox.Gearbox.Core
         [SerializeField] private bool _initializeOnStart = true;
 
         private Action<StateDefinition> _stateInitializeAction;
+        private List<StateDefinition> _initializedStates = new();
+        private StateDefinition _initialState;
 
         /// <summary>
         /// List of all configured states in this state machine.
         /// </summary>
-        public List<StateData> States => _states;
+        public List<StateDefinition> States => _initializedStates;
 
         /// <summary>
         /// Currently active state instance.
@@ -54,16 +56,25 @@ namespace VolumeBox.Gearbox.Core
                 InitializeStateData(stateData);
             }
 
+            if (_initializedStates.Count <= 0)
+            {
+                return;
+            }
+            
+            _initialState ??= _initializedStates[0];
+
             // Set initial state if available
-            var initialState = FindInitialState();
-            if (initialState != null)
+            await EnterState(_initialState);
+        }
+
+        public void SetInitialState(StateDefinition state)
+        {
+            if (state == null || !_initializedStates.Contains(state))
             {
-                await EnterState(initialState.Instance);
+                return;
             }
-            else if (_states.Count > 0)
-            {
-                Debug.LogWarning("StateMachine has no valid states defined.");
-            }
+            
+            _initialState =  state;
         }
 
         private void InitializeStateData(StateData stateData)
@@ -74,10 +85,8 @@ namespace VolumeBox.Gearbox.Core
             try
             {
                 // Use existing instance if available (created in editor), otherwise create new one
-                stateData.Instance ??= (StateDefinition)Activator.CreateInstance(stateType);
-
-                stateData.Instance.StateMachine = this;
-                _stateInitializeAction?.Invoke(stateData.Instance);
+                var state = stateData.Instance ?? (StateDefinition)Activator.CreateInstance(stateType);
+                AddState(state);
             }
             catch (Exception ex)
             {
@@ -85,14 +94,33 @@ namespace VolumeBox.Gearbox.Core
             }
         }
 
-        private StateData FindInitialState()
+        public void AddState(StateDefinition state)
         {
-            // First, try to find a state marked as initial
-            var initialState = _states.Find(s => s.IsInitialState && s.Instance != null);
-            if (initialState != null) return initialState;
+            if (state == null || _initializedStates.Contains(state))
+            {
+                return;
+            }
+            
+            state.StateMachine = this;
+            _stateInitializeAction?.Invoke(state);
+            _initializedStates.Add(state);
+        }
 
-            // Fallback to first valid state if no initial state is marked
-            return _states.Find(s => s.Instance != null);
+        public void RemoveState(StateDefinition state)
+        {
+            if (state == null || !_initializedStates.Contains(state))
+            {
+                return;
+            }
+
+            _initializedStates.Remove(state);
+        }
+
+        public void Clear()
+        {
+            _initializedStates = new List<StateDefinition>();
+            CurrentState = null;
+            _stateInitializeAction = null;
         }
 
         /// <summary>
@@ -131,7 +159,7 @@ namespace VolumeBox.Gearbox.Core
                 return;
             }
 
-            var matchingStates = _states.FindAll(s => s.Name == stateName && s.Instance != null);
+            var matchingStates = _initializedStates.FindAll(s => s.Name == stateName && s != null);
             if (matchingStates.Count == 0)
             {
                 Debug.LogError($"State '{stateName}' not found or not initialized.");
@@ -143,7 +171,7 @@ namespace VolumeBox.Gearbox.Core
                 ? matchingStates[0]
                 : matchingStates[UnityEngine.Random.Range(0, matchingStates.Count)];
 
-            await PerformTransition(selectedState.Instance, data);
+            await PerformTransition(selectedState, data);
         }
 
         /// <summary>
@@ -155,10 +183,10 @@ namespace VolumeBox.Gearbox.Core
         public async UniTask TransitionToNamed<T>(string stateName, object data = null) where T : StateDefinition
         {
             var stateData = string.IsNullOrEmpty(stateName) 
-                ? _states.Find(s => s.Instance != null && s.Instance.GetType() == typeof(T)) 
-                : _states.Find(s => s.Instance != null && s.Instance.GetType() == typeof(T) && s.Name == stateName);
+                ? _initializedStates.Find(s => s != null && s.GetType() == typeof(T)) 
+                : _initializedStates.Find(s => s != null && s.GetType() == typeof(T) && s.Name == stateName);
 
-            if (stateData?.Instance == null)
+            if (stateData == null)
             {
                 var typeName = typeof(T).Name;
                 var namePart = string.IsNullOrEmpty(stateName) ? "" : $" with name '{stateName}'";
@@ -166,7 +194,7 @@ namespace VolumeBox.Gearbox.Core
                 return;
             }
 
-            await PerformTransition(stateData.Instance, data);
+            await PerformTransition(stateData, data);
         }
 
         /// <summary>
