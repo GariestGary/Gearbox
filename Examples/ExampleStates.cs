@@ -12,7 +12,7 @@ namespace VolumeBox.Gearbox.Examples
         [SerializeField] private float idleTime = 2.0f;
         [SerializeField] private Color idleColor = Color.blue;
 
-        public override async UniTask OnEnter(StateDefinition fromState, object data)
+        protected override async UniTask OnEnter(StateDefinition fromState, object data)
         {
             if (fromState != null)
             {
@@ -31,13 +31,12 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.Delay((int)(idleTime * 1000));
         }
 
-        public override async UniTask OnUpdate()
+        protected override void OnUpdate(float delta)
         {
             // Idle state just waits
-            await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit(StateDefinition toState)
+        protected override async UniTask OnExit(StateDefinition toState)
         {
             if (toState != null)
             {
@@ -63,7 +62,7 @@ namespace VolumeBox.Gearbox.Examples
         private float journeyLength;
         private float startTime;
 
-        public override async UniTask OnEnter(StateDefinition fromState, object data)
+        protected override async UniTask OnEnter(StateDefinition fromState, object data)
         {
             // Check if custom target position was passed via data
             if (data is Vector3 customTarget)
@@ -98,16 +97,14 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnUpdate()
+        protected override void OnUpdate(float delta)
         {
             float distCovered = (Time.time - startTime) * moveSpeed;
             float fractionOfJourney = distCovered / journeyLength;
             transform.position = Vector3.Lerp(startPosition, targetPosition, fractionOfJourney);
-
-            await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit(StateDefinition toState)
+        protected override async UniTask OnExit(StateDefinition toState)
         {
             if (toState != null)
             {
@@ -131,7 +128,7 @@ namespace VolumeBox.Gearbox.Examples
 
         private float lastAttackTime;
 
-        public override async UniTask OnEnter(StateDefinition fromState, object data)
+        protected override async UniTask OnEnter(StateDefinition fromState, object data)
         {
             // Check if damage was modified via data
             if (data is float customDamage && customDamage > 0)
@@ -157,19 +154,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnUpdate()
+        protected override void OnUpdate(float delta)
         {
-            if (Time.time - lastAttackTime >= attackCooldown)
-            {
-                Debug.Log($"Attacking for {attackDamage} damage!");
-                lastAttackTime = Time.time;
-                // Attack logic would go here
-            }
-
-            await UniTask.CompletedTask;
+            if (!(Time.time - lastAttackTime >= attackCooldown)) return;
+            
+            Debug.Log($"Attacking for {attackDamage} damage!");
+            lastAttackTime = Time.time;
+            // Attack logic would go here
         }
 
-        public override async UniTask OnExit(StateDefinition toState)
+        protected override async UniTask OnExit(StateDefinition toState)
         {
             if (toState != null)
             {
@@ -194,7 +188,7 @@ namespace VolumeBox.Gearbox.Examples
 
         private int currentWaypointIndex = 0;
 
-        public override async UniTask OnEnter(StateDefinition fromState, object data)
+        protected override async UniTask OnEnter(StateDefinition fromState, object data)
         {
             if (fromState != null)
             {
@@ -217,7 +211,7 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnUpdate()
+        protected override void OnUpdate(float delta)
         {
             if (waypoints.Length == 0) return;
 
@@ -226,19 +220,16 @@ namespace VolumeBox.Gearbox.Examples
 
             // Move towards current waypoint
             Vector3 direction = (target - currentPos).normalized;
-            transform.position += direction * moveSpeed * Time.deltaTime;
+            transform.position += direction * moveSpeed * delta;
 
             // Check if reached waypoint
-            if (Vector3.Distance(currentPos, target) < waypointThreshold)
-            {
-                currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
-                Debug.Log($"Reached waypoint {currentWaypointIndex}, moving to next");
-            }
-
-            await UniTask.CompletedTask;
+            if (!(Vector3.Distance(currentPos, target) < waypointThreshold)) return;
+            
+            currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
+            Debug.Log($"Reached waypoint {currentWaypointIndex}, moving to next");
         }
 
-        public override async UniTask OnExit(StateDefinition toState)
+        protected override async UniTask OnExit(StateDefinition toState)
         {
             if (toState != null)
             {
@@ -261,7 +252,7 @@ namespace VolumeBox.Gearbox.Examples
         [SerializeField] private float fleeSpeed = 3.0f;
         [SerializeField] private Color fleeColor = Color.magenta;
 
-        public override async UniTask OnEnter(StateDefinition fromState, object data)
+        protected override async UniTask OnEnter(StateDefinition fromState, object data)
         {
             if (fromState != null)
             {
@@ -280,12 +271,12 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnUpdate()
+        protected override void OnUpdate(float delta)
         {
             if (fleeTarget != null)
             {
                 Vector3 fleeDirection = (transform.position - fleeTarget.position).normalized;
-                transform.position += fleeDirection * fleeSpeed * Time.deltaTime;
+                transform.position += fleeDirection * fleeSpeed * delta;
 
                 // Check if far enough away
                 if (Vector3.Distance(transform.position, fleeTarget.position) >= fleeDistance)
@@ -293,11 +284,9 @@ namespace VolumeBox.Gearbox.Examples
                     Debug.Log("Fled far enough, can stop fleeing");
                 }
             }
-
-            await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit(StateDefinition toState)
+        protected override async UniTask OnExit(StateDefinition toState)
         {
             if (toState != null)
             {
@@ -318,7 +307,7 @@ namespace VolumeBox.Gearbox.Examples
         [SerializeField] private Vector3 rotationAxis = Vector3.up;
         [SerializeField] private Color rotateColor = Color.cyan;
 
-        public override async UniTask OnEnter(StateDefinition fromState, object data)
+        protected override async UniTask OnEnter(StateDefinition fromState, object data)
         {
             if (fromState != null)
             {
@@ -337,13 +326,12 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnUpdate()
+        protected override void OnUpdate(float delta)
         {
-            transform.Rotate(rotationAxis, rotationSpeed * Time.deltaTime);
-            await UniTask.CompletedTask;
+            transform.Rotate(rotationAxis, rotationSpeed * delta);
         }
 
-        public override async UniTask OnExit(StateDefinition toState)
+        protected override async UniTask OnExit(StateDefinition toState)
         {
             if (toState != null)
             {
@@ -367,7 +355,7 @@ namespace VolumeBox.Gearbox.Examples
         private float lastJumpTime;
         private Rigidbody rb;
 
-        public override async UniTask OnEnter(StateDefinition fromState, object data)
+        protected override async UniTask OnEnter(StateDefinition fromState, object data)
         {
             if (fromState != null)
             {
@@ -394,19 +382,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnUpdate()
+        protected override void OnUpdate(float delta)
         {
-            if (rb != null && Time.time - lastJumpTime >= jumpCooldown)
-            {
-                Debug.Log("Jumping!");
-                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-                lastJumpTime = Time.time;
-            }
-
-            await UniTask.CompletedTask;
+            if (rb == null || !(Time.time - lastJumpTime >= jumpCooldown)) return;
+            
+            Debug.Log("Jumping!");
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            lastJumpTime = Time.time;
         }
 
-        public override async UniTask OnExit(StateDefinition toState)
+        protected override async UniTask OnExit(StateDefinition toState)
         {
             if (toState != null)
             {
@@ -430,7 +415,7 @@ namespace VolumeBox.Gearbox.Examples
 
         private Vector3 lastKnownPosition;
 
-        public override async UniTask OnEnter(StateDefinition fromState, object data)
+        protected override async UniTask OnEnter(StateDefinition fromState, object data)
         {
             // Check if target was passed via data
             if (data is Transform targetTransform)
@@ -461,34 +446,31 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnUpdate()
+        protected override void OnUpdate(float delta)
         {
-            if (chaseTarget != null)
+            if (chaseTarget == null) return;
+            
+            lastKnownPosition = chaseTarget.position;
+            var direction = (lastKnownPosition - transform.position);
+
+            if (direction.magnitude > stopDistance)
             {
-                lastKnownPosition = chaseTarget.position;
-                Vector3 direction = (lastKnownPosition - transform.position);
+                direction.Normalize();
+                transform.position += direction * chaseSpeed * delta;
 
-                if (direction.magnitude > stopDistance)
+                // Look at target
+                if (direction != Vector3.zero)
                 {
-                    direction.Normalize();
-                    transform.position += direction * chaseSpeed * Time.deltaTime;
-
-                    // Look at target
-                    if (direction != Vector3.zero)
-                    {
-                        transform.rotation = Quaternion.LookRotation(direction);
-                    }
-                }
-                else
-                {
-                    Debug.Log("Reached chase target");
+                    transform.rotation = Quaternion.LookRotation(direction);
                 }
             }
-
-            await UniTask.CompletedTask;
+            else
+            {
+                Debug.Log("Reached chase target");
+            }
         }
 
-        public override async UniTask OnExit(StateDefinition toState)
+        protected override async UniTask OnExit(StateDefinition toState)
         {
             if (toState != null)
             {
@@ -508,7 +490,7 @@ namespace VolumeBox.Gearbox.Examples
         [SerializeField] private KeyCode activationKey = KeyCode.Space;
         [SerializeField] private Color waitingColor = Color.gray;
 
-        public override async UniTask OnEnter(StateDefinition fromState, object data)
+        protected override async UniTask OnEnter(StateDefinition fromState, object data)
         {
             if (fromState != null)
             {
@@ -527,18 +509,16 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnUpdate()
+        protected override void OnUpdate(float delta)
         {
             if (Input.GetKeyDown(activationKey))
             {
                 Debug.Log($"Key {activationKey} pressed - activating!");
                 // The state machine will handle the transition
             }
-
-            await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnExit(StateDefinition toState)
+        protected override async UniTask OnExit(StateDefinition toState)
         {
             if (toState != null)
             {
@@ -561,7 +541,7 @@ namespace VolumeBox.Gearbox.Examples
 
         private Vector3 originalScale;
 
-        public override async UniTask OnEnter(StateDefinition fromState, object data)
+        protected override async UniTask OnEnter(StateDefinition fromState, object data)
         {
             if (fromState != null)
             {
@@ -582,13 +562,12 @@ namespace VolumeBox.Gearbox.Examples
             await UniTask.CompletedTask;
         }
 
-        public override async UniTask OnUpdate()
+        protected override void OnUpdate(float delta)
         {
-            transform.localScale = Vector3.Lerp(transform.localScale, targetScale, scaleSpeed * Time.deltaTime);
-            await UniTask.CompletedTask;
+            transform.localScale = Vector3.Lerp(transform.localScale, targetScale, scaleSpeed * delta);
         }
 
-        public override async UniTask OnExit(StateDefinition toState)
+        protected override async UniTask OnExit(StateDefinition toState)
         {
             if (toState != null)
             {

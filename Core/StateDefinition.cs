@@ -23,19 +23,34 @@ namespace VolumeBox.Gearbox.Core
         /// </summary>
         protected GameObject gameObject => StateMachine?.gameObject;
 
-        public virtual UniTask OnEnter(StateDefinition fromState = null, object data = null)
+        internal async UniTask Enter(StateDefinition from = null, object data = null)
+        {
+            await OnEnter(from, data);
+        }
+
+        internal async UniTask Exit(StateDefinition to = null)
+        {
+            await OnExit(to);
+        }
+
+        protected virtual UniTask OnEnter(StateDefinition from, object data)
         {
             return UniTask.CompletedTask;
         }
 
-        public virtual UniTask OnExit(StateDefinition toState = null)
+        protected virtual UniTask OnExit(StateDefinition to)
         {
             return UniTask.CompletedTask;
         }
 
-        public virtual UniTask OnUpdate()
+        public void Update(float delta)
         {
-            return UniTask.CompletedTask;
+            OnUpdate(delta);
+        }
+
+        protected virtual void OnUpdate(float delta)
+        {
+            
         }
 
         /// <summary>

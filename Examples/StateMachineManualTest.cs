@@ -29,7 +29,7 @@ namespace VolumeBox.Gearbox.Tests
             }
 
             // Initialize the state machine
-            _stateMachine.InitializeStateMachine().Forget();
+            _stateMachine.Initialize().Forget();
 
             Debug.Log("StateMachine Manual Test Started");
             Debug.Log($"Number of states: {_stateMachine.States.Count}");

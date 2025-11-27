@@ -46,7 +46,7 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(stateData);
 
             // Initialize should create the state instance
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             Assert.AreEqual(1, _stateMachine.States.Count);
             Assert.IsNotNull(_stateMachine.States[0].Instance);
@@ -66,7 +66,7 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(stateData);
 
             // Initialize the state machine
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Verify that CurrentState is set after initialization
             Assert.IsNotNull(_stateMachine.CurrentState);
@@ -94,7 +94,7 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(stateData2);
 
             // Initialize the state machine
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Verify that the marked initial state (MoveState) is the current state
             Assert.IsNotNull(_stateMachine.CurrentState);
@@ -119,64 +119,13 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(idleState);
             _stateMachine.States.Add(moveState);
 
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Transition to Move state
-            yield return _stateMachine.TransitionToState("Move").ToCoroutine();
+            yield return _stateMachine.TransitionToNamed("Move").ToCoroutine();
 
             Assert.IsNotNull(_stateMachine.CurrentState);
             Assert.AreEqual(typeof(MoveState), _stateMachine.CurrentState.GetType());
-        }
-
-        [Test]
-        public void StateMachine_GetAvailableTransitions()
-        {
-            // Setup state with transitions
-            var stateData = new StateData
-            {
-                Name = "TestState",
-                StateTypeName = typeof(IdleState).AssemblyQualifiedName,
-                TransitionNames = new System.Collections.Generic.List<string> { "State1", "State2" }
-            };
-
-            var idleState = new IdleState();
-            stateData.Instance = idleState;
-
-            _stateMachine.States.Add(stateData);
-
-            var transitions = _stateMachine.GetAvailableTransitions(idleState);
-            Assert.AreEqual(2, transitions.Count);
-            Assert.Contains("State1", transitions.ToList());
-            Assert.Contains("State2", transitions.ToList());
-        }
-
-        [UnityTest]
-        public IEnumerator StateMachine_TriggerTransition()
-        {
-            // Setup two states
-            var state1Data = new StateData
-            {
-                Name = "State1",
-                StateTypeName = typeof(IdleState).AssemblyQualifiedName
-            };
-            var state2Data = new StateData
-            {
-                Name = "State2",
-                StateTypeName = typeof(MoveState).AssemblyQualifiedName,
-                TransitionNames = new System.Collections.Generic.List<string> { "State1" }
-            };
-
-            _stateMachine.States.Add(state1Data);
-            _stateMachine.States.Add(state2Data);
-
-            // Initialize the state machine first
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
-            // Transition to State2
-            yield return _stateMachine.TransitionToState("State2").ToCoroutine();
-            // Now trigger transition to State1 (index 0)
-            yield return _stateMachine.TriggerTransition(_stateMachine.CurrentState, 0).ToCoroutine();
-
-            Assert.AreEqual(typeof(IdleState), _stateMachine.CurrentState.GetType());
         }
 
         [UnityTest]
@@ -190,10 +139,10 @@ namespace VolumeBox.Gearbox.Tests
             };
             _stateMachine.States.Add(moveStateData);
 
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Transition to move state
-            yield return _stateMachine.TransitionToState("Move").ToCoroutine();
+            yield return _stateMachine.TransitionToNamed("Move").ToCoroutine();
 
             // Verify state is active
             Assert.IsNotNull(_stateMachine.CurrentState);
@@ -240,7 +189,7 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.SetStateInitializeAction(_ => actionCalled = true);
 
             // Initialize the state machine
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Assert that the action was invoked
             Assert.IsTrue(actionCalled);
@@ -267,14 +216,14 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(moveStateData);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Verify initial state has null fromState
             Assert.IsNotNull(_stateMachine.CurrentState);
             Assert.AreEqual(typeof(IdleState), _stateMachine.CurrentState.GetType());
 
             // Transition to Move state
-            yield return _stateMachine.TransitionToState("Move").ToCoroutine();
+            yield return _stateMachine.TransitionToNamed("Move").ToCoroutine();
 
             // Verify transition occurred
             Assert.AreEqual(typeof(MoveState), _stateMachine.CurrentState.GetType());
@@ -299,10 +248,10 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(moveStateData);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Transition to Move state
-            yield return _stateMachine.TransitionToState("Move").ToCoroutine();
+            yield return _stateMachine.TransitionToNamed("Move").ToCoroutine();
 
             // Verify transition occurred
             Assert.AreEqual(typeof(MoveState), _stateMachine.CurrentState.GetType());
@@ -321,46 +270,14 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(moveStateData);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Transition with data
             var customTarget = new Vector3(10, 0, 10);
-            yield return _stateMachine.TransitionToState("Move", customTarget).ToCoroutine();
+            yield return _stateMachine.TransitionToNamed("Move", customTarget).ToCoroutine();
 
             // Verify transition occurred
             Assert.AreEqual(typeof(MoveState), _stateMachine.CurrentState.GetType());
-        }
-
-        [UnityTest]
-        public IEnumerator StateMachine_TriggerTransitionWithData()
-        {
-            // Setup two states
-            var state1Data = new StateData
-            {
-                Name = "State1",
-                StateTypeName = typeof(IdleState).AssemblyQualifiedName
-            };
-            var state2Data = new StateData
-            {
-                Name = "State2",
-                StateTypeName = typeof(MoveState).AssemblyQualifiedName,
-                TransitionNames = new System.Collections.Generic.List<string> { "State1" }
-            };
-
-            _stateMachine.States.Add(state1Data);
-            _stateMachine.States.Add(state2Data);
-
-            // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
-
-            // Transition to State2
-            yield return _stateMachine.TransitionToState("State2").ToCoroutine();
-
-            // Trigger transition with data
-            const string testData = "TestData";
-            yield return _stateMachine.TriggerTransition(_stateMachine.CurrentState, 0, testData).ToCoroutine();
-
-            Assert.AreEqual(typeof(IdleState), _stateMachine.CurrentState.GetType());
         }
 
         [UnityTest]
@@ -376,7 +293,7 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(idleStateData);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Verify initial state is set
             Assert.IsNotNull(_stateMachine.CurrentState);
@@ -402,10 +319,10 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(moveState);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Transition to IdleState by type
-            yield return _stateMachine.TransitionToState<IdleState>().ToCoroutine();
+            yield return _stateMachine.TransitionTo<IdleState>().ToCoroutine();
 
             Assert.AreEqual(typeof(IdleState), _stateMachine.CurrentState.GetType());
         }
@@ -429,10 +346,10 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(idleState2);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Transition to specific named IdleState
-            yield return _stateMachine.TransitionToState<IdleState>("Idle2").ToCoroutine();
+            yield return _stateMachine.TransitionToNamed<IdleState>("Idle2").ToCoroutine();
 
             Assert.AreEqual(typeof(IdleState), _stateMachine.CurrentState.GetType());
             Assert.AreEqual("Idle2", _stateMachine.States.Find(s => s.Instance == _stateMachine.CurrentState).Name);
@@ -463,10 +380,10 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(idleState3);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Transition to IdleState (should select first one)
-            yield return _stateMachine.TransitionToState<IdleState>().ToCoroutine();
+            yield return _stateMachine.TransitionTo<IdleState>().ToCoroutine();
 
             Assert.AreEqual(typeof(IdleState), _stateMachine.CurrentState.GetType());
         }
@@ -490,10 +407,10 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(moveState1);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Transition to state with duplicate name (should select randomly)
-            yield return _stateMachine.TransitionToState("DuplicateName").ToCoroutine();
+            yield return _stateMachine.TransitionToNamed("DuplicateName").ToCoroutine();
 
             Assert.IsNotNull(_stateMachine.CurrentState);
             var currentStateData = _stateMachine.States.Find(s => s.Instance == _stateMachine.CurrentState);
@@ -522,10 +439,10 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(moveState);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Transition to specific type with name
-            yield return _stateMachine.TransitionToState<MoveState>("SharedName").ToCoroutine();
+            yield return _stateMachine.TransitionToNamed<MoveState>("SharedName").ToCoroutine();
 
             Assert.AreEqual(typeof(MoveState), _stateMachine.CurrentState.GetType());
             Assert.AreEqual("SharedName", _stateMachine.States.Find(s => s.Instance == _stateMachine.CurrentState).Name);
@@ -546,8 +463,8 @@ namespace VolumeBox.Gearbox.Tests
             // The transition should handle the case where no states are initialized
 
             // This should not throw and should log an error
-            UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error, "State of type 'MoveState' not found or not initialized.");
-            Assert.DoesNotThrow(() => _stateMachine.TransitionToState<MoveState>());
+            LogAssert.Expect(LogType.Error, "State of type 'MoveState' not found or not initialized.");
+            Assert.DoesNotThrow(() => _stateMachine.TransitionTo<MoveState>().Forget());
         }
 
         [Test]
@@ -563,7 +480,7 @@ namespace VolumeBox.Gearbox.Tests
 
             // This should not throw and should log an error
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error, "State 'NonExistentState' not found or not initialized.");
-            Assert.DoesNotThrow(() => _stateMachine.TransitionToState("NonExistentState"));
+            Assert.DoesNotThrow(() => _stateMachine.TransitionToNamed("NonExistentState"));
         }
 
         [UnityTest]
@@ -585,7 +502,7 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(moveState);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Test the new generic transition method
             yield return _stateMachine.TransitionTo<MoveState>().ToCoroutine();
@@ -606,7 +523,7 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(moveState);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Test the new generic transition method with data
             var customTarget = new Vector3(15, 0, 15);
@@ -634,10 +551,10 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(idleState2);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Test the new generic transition method with name
-            yield return _stateMachine.TransitionTo<IdleState>("Idle2").ToCoroutine();
+            yield return _stateMachine.TransitionToNamed<IdleState>("Idle2").ToCoroutine();
 
             Assert.AreEqual(typeof(IdleState), _stateMachine.CurrentState.GetType());
             Assert.AreEqual("Idle2", _stateMachine.States.Find(s => s.Instance == _stateMachine.CurrentState).Name);
@@ -662,7 +579,7 @@ namespace VolumeBox.Gearbox.Tests
             _stateMachine.States.Add(moveState);
 
             // Initialize
-            yield return _stateMachine.InitializeStateMachine().ToCoroutine();
+            yield return _stateMachine.Initialize().ToCoroutine();
 
             // Test the StateDefinition's TransitionTo method
             var currentState = _stateMachine.CurrentState as IdleState;

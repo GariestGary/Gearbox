@@ -10,7 +10,6 @@ namespace VolumeBox.Gearbox.Core
         public string Name;
         public string StateTypeName;
         public bool IsInitialState;
-        public List<string> TransitionNames = new List<string>();
 
         [SerializeReference] public StateDefinition Instance;
 
