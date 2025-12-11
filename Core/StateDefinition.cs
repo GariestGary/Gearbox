@@ -7,7 +7,7 @@ namespace VolumeBox.Gearbox.Core
     [Serializable]
     public abstract class StateDefinition
     {
-        public string Name { get; set; }
+        [field: SerializeField] public string Name { get; set; }
         
         /// <summary>
         /// Reference to the StateMachine component that owns this state.

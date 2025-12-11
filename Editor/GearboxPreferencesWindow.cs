@@ -34,7 +34,6 @@ namespace VolumeBox.Gearbox.Editor
             if (_serializedPreferences.hasModifiedProperties)
             {
                 _serializedPreferences.ApplyModifiedProperties();
-                GearboxTypeCache.ClearCache(); // Clear cache when preferences change
             }
         }
     }

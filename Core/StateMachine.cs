@@ -13,7 +13,8 @@ namespace VolumeBox.Gearbox.Core
     {
         [SerializeField] private List<StateData> _states = new();
         [SerializeField] private bool _initializeOnStart = true;
-        [SerializeReference] private StateDefinition _initialState;
+        
+        private StateDefinition _initialState;
 
         private Action<StateDefinition> _stateInitializeAction;
         private List<StateDefinition> _initializedStates = new();
@@ -80,19 +81,18 @@ namespace VolumeBox.Gearbox.Core
 
         private void InitializeStateData(StateData stateData)
         {
-            var stateType = stateData.GetStateType();
-            if (stateType == null) return;
+            if (stateData.Instance == null)
+            {
+                return;
+            }
 
-            try
+            //If initial state was not set before initializing then set it from inspector state
+            if (stateData.IsInitial && _initialState == null)
             {
-                // Use existing instance if available (created in editor), otherwise create new one
-                var state = stateData.Instance ?? (StateDefinition)Activator.CreateInstance(stateType);
-                AddState(state);
+                _initialState = stateData.Instance;
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Failed to create instance of {stateType.Name}: {ex.Message}");
-            }
+            
+            AddState(stateData.Instance);
         }
 
         public void AddState(StateDefinition state)

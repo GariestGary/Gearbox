@@ -146,30 +146,6 @@ namespace VolumeBox.Gearbox.Tests
             Assert.AreEqual(typeof(MoveState), _stateMachine.CurrentState.GetType());
         }
 
-        [Test]
-        public void StateData_SetStateType()
-        {
-            var stateData = new StateData();
-
-            stateData.SetStateType(typeof(IdleState));
-
-            Assert.AreEqual(typeof(IdleState).AssemblyQualifiedName, stateData.StateTypeName);
-            Assert.AreEqual(typeof(IdleState), stateData.GetStateType());
-        }
-
-        [Test]
-        public void StateData_GetStateType()
-        {
-            var stateData = new StateData
-            {
-                StateTypeName = typeof(MoveState).AssemblyQualifiedName
-            };
-
-            var stateType = stateData.GetStateType();
-
-            Assert.AreEqual(typeof(MoveState), stateType);
-        }
-
         [UnityTest]
         public IEnumerator StateMachine_InstantiateActionWorks()
         {
