@@ -5,10 +5,9 @@
 **A powerful, flexible state machine system for Unity with async/await support**
 
 [![Unity](https://img.shields.io/badge/Unity-2021.3+-black.svg)](https://unity.com/)
-[![.NET](https://img.shields.io/badge/.NET-4.7.1+-blue.svg)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-*No more graph editors - Pure code-driven state management with visual inspector interface*
+*Pure code-driven state management with visual inspector interface*
 
 
 </div>
@@ -39,25 +38,16 @@
 - ✅ **Transition Management** - Multiple transition methods (by name, type, instance)
 - ✅ **Performance Optimized** - Cached type scanning and efficient updates
 - ✅ **Data Passing** - Pass arbitrary data objects during state transitions
-- ✅ **State Categories** - Organize states in inspector dropdown with `[StateCategory]` attribute
 
 ### 🎨 **Developer Experience**
 - ✅ **Zero Boilerplate** - Simple state classes with automatic serialization
 - ✅ **Unity Integration** - Direct access to `transform`, `GetComponent<T>`, `GetComponentInChildren<T>`, etc.
-- ✅ **Visual Feedback** - Color-coded states, initial state indicators, real-time editing
-- ✅ **Assembly Scanning** - Configurable type discovery via Preferences window
-- ✅ **Comprehensive Testing** - 40+ unit and integration tests included
-- ✅ **Manual Testing** - Built-in `StateMachineManualTest` component for debugging
 - ✅ **Dependency Injection** - `SetStateInitializeAction` for custom initialization logic
 
 ### 🔧 **Architecture**
-- ✅ **Component-Based** - Attach to GameObjects like any Unity component
 - ✅ **Serializable States** - All `[SerializeField]` and public fields automatically saved
 - ✅ **Runtime Flexibility** - Add/remove states dynamically with `AddState()`/`RemoveState()`
-- ✅ **Memory Efficient** - Lazy instantiation and smart caching
 - ✅ **Lifecycle Hooks** - `OnEnter(fromState, data)`, `OnUpdate(delta)`, `OnExit(toState)`
-- ✅ **Error Handling** - Robust error catching with detailed logging
-- ✅ **Multiple Initial States** - Programmatic control with `SetInitialState()`
 
 ---
 
@@ -70,7 +60,6 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 using VolumeBox.Gearbox.Core;
 
-[StateCategory("Basic/Movement")] // Optional: Organize in inspector dropdown
 public class MyCustomState : StateDefinition
 {
     [SerializeField] private float speed = 5.0f;
@@ -112,7 +101,6 @@ public class MyCustomState : StateDefinition
    - Enter a **Name** (e.g., "Idle", "Move", "Attack")
    - Select **Type** from dropdown (shows all `StateDefinition` subclasses)
    - Configure **Properties** (automatically displayed)
-   - Add **Transitions** (dropdown of other state names)
 
 ### 3. Runtime Usage
 
@@ -186,14 +174,6 @@ stateMachine.DoUpdate(Time.deltaTime);
 | `IsInitial` | Whether this state is the initial state |
 | `Instance` | Serialized reference to StateDefinition instance |
 
-### StateCategoryAttribute
-
-| Property | Description |
-|----------|-------------|
-| `CategoryPath` | Category path for organizing states in inspector dropdown |
-
-**Usage:** `[StateCategory("AI/Combat")]` above state class definition.
-
 ---
 
 ## 🎯 State Definition
@@ -206,7 +186,6 @@ All states inherit from `StateDefinition`:
 using Cysharp.Threading.Tasks;
 using VolumeBox.Gearbox.Core;
 
-[StateCategory("Custom/MyStates")] // Optional category for inspector organization
 public class MyState : StateDefinition
 {
     // Serializable fields are automatically saved/loaded
@@ -454,71 +433,6 @@ await stateMachine.TransitionToNamed<DataDrivenState>("FastMove", 10f);
 await stateMachine.TransitionToNamed("DataDriven", customSpeed: 15f);
 ```
 
-### State Categories Example
-
-```csharp
-// Organize states in inspector dropdown with categories
-[StateCategory("AI/Combat")]
-public class AttackState : StateDefinition { /* ... */ }
-
-[StateCategory("AI/Movement")]
-public class PatrolState : StateDefinition { /* ... */ }
-
-[StateCategory("UI/Menus")]
-public class MenuState : StateDefinition { /* ... */ }
-```
-
----
-
-## 🧪 Testing
-
-### Automated Tests
-
-Run comprehensive tests via **Window → General → Test Runner**:
-
-- **Unit Tests**: Core functionality validation
-- **Integration Tests**: End-to-end state machine flows
-- **Async Tests**: Proper async operation handling
-
-### Manual Testing
-
-Use the included `StateMachineManualTest` component:
-
-```csharp
-// Attach to GameObject with StateMachine
-// Press Space: Cycle through transitions
-// Press R: Random transition
-// View debug logs and on-screen status
-```
-
-### Example Test Structure
-
-```csharp
-[UnityTest]
-public IEnumerator StateMachine_BasicTransition()
-{
-    var stateMachine = new GameObject().AddComponent<StateMachine>();
-
-    // Create state instances
-    var idleState = new IdleState { Name = "Idle" };
-    var moveState = new MoveState { Name = "Move" };
-
-    // Add states to state machine
-    stateMachine.AddState(idleState);
-    stateMachine.AddState(moveState);
-
-    // Initialize and test
-    yield return stateMachine.Initialize().ToCoroutine();
-    yield return stateMachine.TransitionToNamed("Move").ToCoroutine();
-
-    Assert.AreEqual(typeof(MoveState), stateMachine.CurrentState.GetType());
-}
-```
-
----
-
-## 🔧 Advanced Usage
-
 ### Dynamic State Management
 
 ```csharp
@@ -723,44 +637,3 @@ public interface IMessageReceiver
 - **Transition Validation**: Cache frequently used transition lookups
 - **Memory Management**: Use `Clear()` to release all state instances when needed
 - **Async Operations**: Use `Forget()` for fire-and-forget transitions in synchronous contexts
-
----
-
-## ❓ FAQ
-
-### **Q: How is this different from Unity's Animator?**
-**A:** Animator focuses on animation blending and Mecanim graphs. Gearbox is a code-first state machine for game logic, AI behaviors, and UI flows with full async support.
-
-### **Q: Can I have multiple state machines on one GameObject?**
-**A:** Yes! Each StateMachine component operates independently. Use different components for different behaviors (e.g., AI states, UI states).
-
-### **Q: Are states singletons or instances?**
-**A:** States are instantiated per StateMachine. Each StateMachine has its own instances with separate serialized data.
-
-### **Q: How do transitions work?**
-**A:** Transitions can be triggered using multiple methods: by state name (`TransitionToNamed`), by type (`TransitionTo<T>`), or by instance (`TransitionToState`). You can also pass data objects during transitions for dynamic state configuration.
-
-### **Q: Can I modify states at runtime?**
-**A:** Yes, but changes to the States list require reinitialization. Individual state properties can be modified directly.
-
-### **Q: What's the performance impact?**
-**A:** Minimal! Type scanning is cached, async operations are efficient, and only active states consume Update cycles.
-
-### **Q: Can I use this for UI state management?**
-**A:** Absolutely! Perfect for menu systems, dialog flows, and complex UI state machines.
-
----
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-<div align="center">
-
-**Made with ❤️ for Unity developers**
-
-[⭐ Star on GitHub](https://github.com/your-repo) • [📖 Documentation](https://your-docs) • [🐛 Report Issues](https://github.com/your-repo/issues)
-
-</div>
