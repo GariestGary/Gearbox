@@ -1,10 +1,11 @@
 {
   "name": "com.volumebox.gearbox",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "displayName": "Gearbox",
   "description": "A powerful, flexible state machine system for Unity with async/await support.",
   "dependencies": {
-	  "com.cysharp.unitask": "2.5.4"
+	  "com.cysharp.unitask": "2.5.4",
+      "com.alexeytaranov.serializereferencedropdown": "1.2.5"
   },
   "keywords": [
     "statemachine",

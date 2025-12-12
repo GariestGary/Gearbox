@@ -1,8 +1,5 @@
 # 🎮 Gearbox - Async State Machine
 
-> [!WARNING]
-> Some parts of this package was written by AI and need to be tested properly. Not recommended to use in production. Later this warning will gone :)
-
 <div align="center">
 
 **A powerful, flexible state machine system for Unity with async/await support**
@@ -36,24 +33,31 @@
 ## ✨ Features
 
 ### 🎯 **Core Features**
-- ✅ **Async/Await Support** - Fully asynchronous state transitions
-- ✅ **Type-Safe** - Strong typing with compile-time checks
-- ✅ **Inspector Integration** - Visual state configuration in Unity
-- ✅ **Transition Management** - Named transitions with validation
+- ✅ **Async/Await Support** - Fully asynchronous state transitions with UniTask
+- ✅ **Type-Safe** - Strong typing with compile-time checks and generic methods
+- ✅ **Inspector Integration** - Visual state configuration with foldouts and color coding
+- ✅ **Transition Management** - Multiple transition methods (by name, type, instance)
 - ✅ **Performance Optimized** - Cached type scanning and efficient updates
+- ✅ **Data Passing** - Pass arbitrary data objects during state transitions
+- ✅ **State Categories** - Organize states in inspector dropdown with `[StateCategory]` attribute
 
 ### 🎨 **Developer Experience**
 - ✅ **Zero Boilerplate** - Simple state classes with automatic serialization
-- ✅ **Unity Integration** - Direct access to `transform`, `GetComponent<T>`, etc.
-- ✅ **Visual Feedback** - Color-coded states and real-time editing
-- ✅ **Assembly Scanning** - Configurable type discovery for large projects
-- ✅ **Comprehensive Testing** - Unit and integration tests included
+- ✅ **Unity Integration** - Direct access to `transform`, `GetComponent<T>`, `GetComponentInChildren<T>`, etc.
+- ✅ **Visual Feedback** - Color-coded states, initial state indicators, real-time editing
+- ✅ **Assembly Scanning** - Configurable type discovery via Preferences window
+- ✅ **Comprehensive Testing** - 40+ unit and integration tests included
+- ✅ **Manual Testing** - Built-in `StateMachineManualTest` component for debugging
+- ✅ **Dependency Injection** - `SetStateInitializeAction` for custom initialization logic
 
 ### 🔧 **Architecture**
 - ✅ **Component-Based** - Attach to GameObjects like any Unity component
-- ✅ **Serializable States** - All state properties automatically saved
-- ✅ **Runtime Flexibility** - Add/remove states dynamically
+- ✅ **Serializable States** - All `[SerializeField]` and public fields automatically saved
+- ✅ **Runtime Flexibility** - Add/remove states dynamically with `AddState()`/`RemoveState()`
 - ✅ **Memory Efficient** - Lazy instantiation and smart caching
+- ✅ **Lifecycle Hooks** - `OnEnter(fromState, data)`, `OnUpdate(delta)`, `OnExit(toState)`
+- ✅ **Error Handling** - Robust error catching with detailed logging
+- ✅ **Multiple Initial States** - Programmatic control with `SetInitialState()`
 
 ---
 
@@ -62,31 +66,39 @@
 ### 1. Create a State Class
 
 ```csharp
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using VolumeBox.Gearbox.Core;
 
+[StateCategory("Basic/Movement")] // Optional: Organize in inspector dropdown
 public class MyCustomState : StateDefinition
 {
     [SerializeField] private float speed = 5.0f;
     [SerializeField] private Color stateColor = Color.blue;
 
-    public override async UniTask OnEnter()
+    protected override async UniTask OnEnter(StateDefinition from, object data)
     {
-        Debug.Log("Entering custom state!");
+        Debug.Log($"Entering custom state from {(from?.GetType().Name ?? "null")}!");
         GetComponent<Renderer>().material.color = stateColor;
+        
+        // Use data parameter if provided
+        if (data is float customSpeed)
+        {
+            speed = customSpeed;
+            Debug.Log($"Custom speed set: {speed}");
+        }
+        
         await UniTask.CompletedTask;
     }
 
-    public override async UniTask OnUpdate()
+    protected override void OnUpdate(float delta)
     {
-        transform.Translate(Vector3.forward * speed * Time.deltaTime);
-        await UniTask.CompletedTask;
+        transform.Translate(Vector3.forward * speed * delta);
     }
 
-    public override async UniTask OnExit()
+    protected override async UniTask OnExit(StateDefinition to)
     {
-        Debug.Log("Exiting custom state!");
+        Debug.Log($"Exiting custom state, transitioning to {(to?.GetType().Name ?? "null")}!");
         await UniTask.CompletedTask;
     }
 }
@@ -108,17 +120,26 @@ public class MyCustomState : StateDefinition
 // Get reference to state machine
 var stateMachine = GetComponent<StateMachine>();
 
-// Initialize (usually called automatically in Start)
-await stateMachine.InitializeStateMachine();
+// Initialize (usually called automatically in Start if _initializeOnStart is true)
+await stateMachine.Initialize();
 
 // Transition by state name
-await stateMachine.TransitionToState("Move");
+await stateMachine.TransitionToNamed("Move");
 
-// Transition by trigger index
-await stateMachine.TriggerTransition(currentState, 0);
+// Transition by state name with data
+await stateMachine.TransitionToNamed("Attack", customDamage: 25f);
 
-// Get available transitions
-var transitions = stateMachine.GetAvailableTransitions(currentState);
+// Transition by type (generic)
+await stateMachine.TransitionTo<MoveState>();
+
+// Transition by type with data
+await stateMachine.TransitionTo<AttackState>(customTarget: enemyTransform);
+
+// Transition by type with name filter (if multiple states of same type)
+await stateMachine.TransitionToNamed<IdleState>("SpecialIdle");
+
+// Manual update (if not using automatic updates)
+stateMachine.DoUpdate(Time.deltaTime);
 ```
 
 ---
@@ -129,37 +150,49 @@ var transitions = stateMachine.GetAvailableTransitions(currentState);
 
 | Method/Property | Description |
 |-----------------|-------------|
-| `States` | List of configured state data |
+| `States` | List of initialized state instances (read-only) |
 | `CurrentState` | Currently active state instance |
-| `InitializeStateMachine()` | Initialize state instances and set initial state |
-| `TransitionToState(string)` | Transition to state by name |
-| `TransitionToState(StateDefinition)` | Transition to specific state instance |
-| `TransitionToState<T>()` | Transition to state by type (generic) |
-| `TransitionTo<T>()` | Transition to state by type (generic, inferred) |
-| `TriggerTransition(StateDefinition, int)` | Trigger transition by index from current state |
-| `GetAvailableTransitions(StateDefinition)` | Get list of available transition names |
+| `Initialize()` | Initialize state instances and set initial state (async) |
+| `SetStateInitializeAction(Action<StateDefinition>)` | Set callback for custom state initialization |
+| `SetInitialState(StateDefinition)` | Programmatically set initial state |
+| `AddState(StateDefinition)` | Add state instance at runtime |
+| `RemoveState(StateDefinition)` | Remove state instance at runtime |
+| `Clear()` | Clear all states and reset state machine |
+| `TransitionToNamed(string, object)` | Transition to state by name with optional data |
+| `TransitionToNamed<T>(string, object)` | Transition to state by type with name filter and data |
+| `TransitionToState(StateDefinition, object)` | Transition to specific state instance with data |
+| `TransitionTo<T>(object)` | Transition to state by type (generic, inferred) with data |
+| `DoUpdate(float)` | Manual update call (pass Time.deltaTime) |
 
 ### StateDefinition Base Class
 
 | Property/Method | Description |
 |-----------------|-------------|
 | `StateMachine` | Reference to owning StateMachine component |
+| `Name` | State name (serialized) |
 | `transform` | Shortcut to StateMachine.transform |
 | `gameObject` | Shortcut to StateMachine.gameObject |
 | `GetComponent<T>()` | Get component from StateMachine GameObject |
-| `TransitionTo<T>()` | Transition to state by type from within state (generic, inferred) |
-| `OnEnter()` | Called when entering state (async) |
-| `OnUpdate()` | Called every frame while active (async) |
-| `OnExit()` | Called when exiting state (async) |
+| `GetComponentInChildren<T>()` | Get component in children from StateMachine GameObject |
+| `GetComponentInParent<T>()` | Get component in parent from StateMachine GameObject |
+| `OnEnter(StateDefinition from, object data)` | Called when entering state (async) |
+| `OnUpdate(float delta)` | Called every frame while active |
+| `OnExit(StateDefinition to)` | Called when exiting state (async) |
 
-### StateData Structure
+### StateData Structure (Serialized)
 
 | Property | Description |
 |----------|-------------|
-| `name` | Human-readable state name |
-| `stateTypeName` | Fully qualified type name |
-| `transitionNames` | List of target state names |
-| `instance` | Runtime state instance |
+| `IsInitial` | Whether this state is the initial state |
+| `Instance` | Serialized reference to StateDefinition instance |
+
+### StateCategoryAttribute
+
+| Property | Description |
+|----------|-------------|
+| `CategoryPath` | Category path for organizing states in inspector dropdown |
+
+**Usage:** `[StateCategory("AI/Combat")]` above state class definition.
 
 ---
 
@@ -170,8 +203,10 @@ var transitions = stateMachine.GetAvailableTransitions(currentState);
 All states inherit from `StateDefinition`:
 
 ```csharp
+using Cysharp.Threading.Tasks;
 using VolumeBox.Gearbox.Core;
 
+[StateCategory("Custom/MyStates")] // Optional category for inspector organization
 public class MyState : StateDefinition
 {
     // Serializable fields are automatically saved/loaded
@@ -181,10 +216,24 @@ public class MyState : StateDefinition
     // Public fields also work
     public bool isActive = true;
 
-    // Async lifecycle methods
-    public override async UniTask OnEnter() { /* ... */ }
-    public override async UniTask OnUpdate() { /* ... */ }
-    public override async UniTask OnExit() { /* ... */ }
+    // Async lifecycle methods with proper signatures
+    protected override async UniTask OnEnter(StateDefinition from, object data)
+    {
+        Debug.Log($"Entering MyState from {(from?.GetType().Name ?? "initial")}");
+        // Use data parameter if needed
+        await UniTask.CompletedTask;
+    }
+    
+    protected override void OnUpdate(float delta)
+    {
+        // Update logic here
+    }
+    
+    protected override async UniTask OnExit(StateDefinition to)
+    {
+        Debug.Log($"Exiting MyState, going to {(to?.GetType().Name ?? "unknown")}");
+        await UniTask.CompletedTask;
+    }
 }
 ```
 
@@ -195,7 +244,7 @@ States have full access to Unity APIs:
 ```csharp
 public class PhysicsState : StateDefinition
 {
-    public override async UniTask OnEnter()
+    protected override async UniTask OnEnter(StateDefinition from, object data)
     {
         // Direct access to transform
         transform.position = Vector3.zero;
@@ -207,6 +256,8 @@ public class PhysicsState : StateDefinition
         // Access child/parent components
         var childRenderer = GetComponentInChildren<Renderer>();
         var parent = GetComponentInParent<Transform>();
+        
+        await UniTask.CompletedTask;
     }
 }
 ```
@@ -218,12 +269,13 @@ States can communicate through the StateMachine:
 ```csharp
 public class AIState : StateDefinition
 {
-    public override async UniTask OnUpdate()
+    protected override void OnUpdate(float delta)
     {
         // Check conditions and trigger transitions
         if (ShouldAttack())
         {
-            await StateMachine.TransitionToState("Attack");
+            // Transition using type-safe generic method
+            StateMachine.TransitionTo<AttackState>().Forget();
         }
     }
 
@@ -278,32 +330,36 @@ public class ConfigurableState : StateDefinition
 
 ```csharp
 // 1. Create states
+[StateCategory("AI/Basic")]
 public class IdleState : StateDefinition
 {
-    public override async UniTask OnEnter()
+    protected override async UniTask OnEnter(StateDefinition from, object data)
     {
         Debug.Log("AI is now idle");
         GetComponent<Renderer>().material.color = Color.gray;
+        await UniTask.CompletedTask;
     }
 }
 
+[StateCategory("AI/Basic")]
 public class PatrolState : StateDefinition
 {
     [SerializeField] private Transform[] waypoints;
     private int currentWaypoint;
 
-    public override async UniTask OnEnter()
+    protected override async UniTask OnEnter(StateDefinition from, object data)
     {
         Debug.Log("Starting patrol");
         GetComponent<Renderer>().material.color = Color.blue;
+        await UniTask.CompletedTask;
     }
 
-    public override async UniTask OnUpdate()
+    protected override void OnUpdate(float delta)
     {
         if (waypoints.Length == 0) return;
 
         var target = waypoints[currentWaypoint].position;
-        transform.position = Vector3.MoveTowards(transform.position, target, 2f * Time.deltaTime);
+        transform.position = Vector3.MoveTowards(transform.position, target, 2f * delta);
 
         if (Vector3.Distance(transform.position, target) < 0.1f)
         {
@@ -318,8 +374,8 @@ public class PatrolState : StateDefinition
 //   - Name: "Patrol", Type: PatrolState, Transitions: ["Idle"]
 
 // 3. Runtime usage
-await stateMachine.InitializeStateMachine(); // Starts with "Idle"
-await stateMachine.TransitionToState("Patrol"); // Switch to patrol
+await stateMachine.Initialize(); // Starts with "Idle"
+await stateMachine.TransitionToNamed("Patrol"); // Switch to patrol
 ```
 
 ### Event-Driven States
@@ -327,16 +383,18 @@ await stateMachine.TransitionToState("Patrol"); // Switch to patrol
 ```csharp
 public class WaitingForInputState : StateDefinition
 {
-    public override async UniTask OnEnter()
+    protected override async UniTask OnEnter(StateDefinition from, object data)
     {
         Debug.Log("Waiting for player input...");
+        await UniTask.CompletedTask;
     }
 
-    public override async UniTask OnUpdate()
+    protected override void OnUpdate(float delta)
     {
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            await StateMachine.TransitionToState("Gameplay");
+            // Use Forget() for fire-and-forget async calls in synchronous methods
+            StateMachine.TransitionToNamed("Gameplay").Forget();
         }
     }
 }
@@ -350,55 +408,64 @@ public class TimedState : StateDefinition
     [SerializeField] private float duration = 3f;
     private float startTime;
 
-    public override async UniTask OnEnter()
+    protected override async UniTask OnEnter(StateDefinition from, object data)
     {
         startTime = Time.time;
         Debug.Log($"Starting timed state for {duration}s");
+        await UniTask.CompletedTask;
     }
 
-    public override async UniTask OnUpdate()
+    protected override void OnUpdate(float delta)
     {
         if (Time.time - startTime >= duration)
         {
-            await StateMachine.TransitionToState("NextState");
+            // Transition to next state when timer expires
+            StateMachine.TransitionToNamed("NextState").Forget();
         }
     }
-    
-    ### Generic Transition Methods
-    
-    The new generic transition methods allow you to transition to states without explicitly specifying state names, using type inference instead:
-    
-    ```csharp
-    public class AIState : StateDefinition
-    {
-        public override async UniTask OnUpdate()
-        {
-            // Old way - requires explicit type specification
-            await StateMachine.TransitionToState<MoveState>();
-            
-            // New way - type is automatically inferred from generic parameter
-            await TransitionTo<MoveState>();
-            
-            // With data parameter
-            await TransitionTo<AttackState>(customDamage: 25f);
-            
-            // With name filter
-            await TransitionTo<IdleState>("SpecialIdle");
-        }
-    }
-    
-    // External transitions (from outside states)
-    var stateMachine = GetComponent<StateMachine>();
-    await stateMachine.TransitionTo<MoveState>();
-    await stateMachine.TransitionTo<AttackState>(customTarget);
-    ```
-    
-    **Benefits:**
-    - **Type Safety**: Compile-time checking of state types
-    - **IntelliSense**: Full IDE support with autocomplete
-    - **Refactoring**: Rename states safely with automatic updates
-    - **Readability**: Clear intent without string literals
 }
+```
+
+### Data Passing Example
+
+```csharp
+public class DataDrivenState : StateDefinition
+{
+    [SerializeField] private float defaultSpeed = 5f;
+    private float currentSpeed;
+
+    protected override async UniTask OnEnter(StateDefinition from, object data)
+    {
+        // Use data parameter to customize state behavior
+        currentSpeed = data is float speed ? speed : defaultSpeed;
+        Debug.Log($"State entered with speed: {currentSpeed}");
+        await UniTask.CompletedTask;
+    }
+
+    protected override void OnUpdate(float delta)
+    {
+        transform.Translate(Vector3.forward * currentSpeed * delta);
+    }
+}
+
+// Usage: Pass data when transitioning
+await stateMachine.TransitionToNamed<DataDrivenState>("FastMove", 10f);
+// or
+await stateMachine.TransitionToNamed("DataDriven", customSpeed: 15f);
+```
+
+### State Categories Example
+
+```csharp
+// Organize states in inspector dropdown with categories
+[StateCategory("AI/Combat")]
+public class AttackState : StateDefinition { /* ... */ }
+
+[StateCategory("AI/Movement")]
+public class PatrolState : StateDefinition { /* ... */ }
+
+[StateCategory("UI/Menus")]
+public class MenuState : StateDefinition { /* ... */ }
 ```
 
 ---
@@ -427,19 +494,22 @@ Use the included `StateMachineManualTest` component:
 ### Example Test Structure
 
 ```csharp
-[Test]
-public void StateMachine_BasicTransition()
+[UnityTest]
+public IEnumerator StateMachine_BasicTransition()
 {
     var stateMachine = new GameObject().AddComponent<StateMachine>();
 
-    // Setup states
-    var idleData = new StateData { name = "Idle", stateTypeName = typeof(IdleState).AssemblyQualifiedName };
-    var moveData = new StateData { name = "Move", stateTypeName = typeof(MoveState).AssemblyQualifiedName };
-    stateMachine.States.AddRange(new[] { idleData, moveData });
+    // Create state instances
+    var idleState = new IdleState { Name = "Idle" };
+    var moveState = new MoveState { Name = "Move" };
+
+    // Add states to state machine
+    stateMachine.AddState(idleState);
+    stateMachine.AddState(moveState);
 
     // Initialize and test
-    await stateMachine.InitializeStateMachine();
-    await stateMachine.TransitionToState("Move");
+    yield return stateMachine.Initialize().ToCoroutine();
+    yield return stateMachine.TransitionToNamed("Move").ToCoroutine();
 
     Assert.AreEqual(typeof(MoveState), stateMachine.CurrentState.GetType());
 }
@@ -449,7 +519,7 @@ public void StateMachine_BasicTransition()
 
 ## 🔧 Advanced Usage
 
-### Dynamic State Creation
+### Dynamic State Management
 
 ```csharp
 public class StateFactory : MonoBehaviour
@@ -460,22 +530,130 @@ public class StateFactory : MonoBehaviour
     {
         stateMachine = GetComponent<StateMachine>();
 
-        // Add states programmatically
-        AddNewState("Jump", typeof(JumpState));
-        AddNewState("Dash", typeof(DashState));
+        // Create state instances programmatically
+        var jumpState = new JumpState { Name = "Jump" };
+        var dashState = new DashState { Name = "Dash" };
 
-        // Configure transitions
-        // (Would need to extend StateMachine API for runtime configuration)
+        // Add states to the state machine
+        stateMachine.AddState(jumpState);
+        stateMachine.AddState(dashState);
+
+        // Set initial state
+        stateMachine.SetInitialState(jumpState);
+
+        // Reinitialize to apply changes
+        stateMachine.Initialize().Forget();
+    }
+}
+```
+
+### Dependency Injection with SetStateInitializeAction
+
+```csharp
+public class StateDependencyInjector : MonoBehaviour
+{
+    private void Start()
+    {
+        var stateMachine = GetComponent<StateMachine>();
+        
+        // Inject dependencies into all states during initialization
+        stateMachine.SetStateInitializeAction(state =>
+        {
+            if (state is IRequiresAudio audioState)
+            {
+                audioState.AudioSystem = GetComponent<AudioSystem>();
+            }
+            
+            if (state is IRequiresConfig configState)
+            {
+                configState.Config = GetComponent<GameConfig>();
+            }
+        });
+        
+        // Initialize with injected dependencies
+        stateMachine.Initialize().Forget();
+    }
+}
+
+public interface IRequiresAudio
+{
+    AudioSystem AudioSystem { get; set; }
+}
+
+public interface IRequiresConfig
+{
+    GameConfig Config { get; set; }
+}
+```
+
+### Runtime State Modification
+
+```csharp
+public class RuntimeStateModifier : MonoBehaviour
+{
+    private StateMachine stateMachine;
+
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.A))
+        {
+            // Add new state at runtime
+            var newState = new CustomState { Name = "RuntimeAdded" };
+            stateMachine.AddState(newState);
+            
+            // Transition to the new state
+            stateMachine.TransitionToNamed("RuntimeAdded").Forget();
+        }
+        
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            // Remove current state (if not active)
+            if (stateMachine.CurrentState != null &&
+                stateMachine.CurrentState.Name != "EssentialState")
+            {
+                stateMachine.RemoveState(stateMachine.CurrentState);
+            }
+        }
+    }
+}
+```
+
+### Manual Update Loop Integration
+
+```csharp
+public class FixedUpdateStateMachine : MonoBehaviour
+{
+    private StateMachine stateMachine;
+
+    void Start()
+    {
+        stateMachine = GetComponent<StateMachine>();
+        stateMachine.Initialize().Forget();
     }
 
-    private void AddNewState(string name, Type stateType)
+    void FixedUpdate()
     {
-        var stateData = new StateData
-        {
-            name = name,
-            stateTypeName = stateType.AssemblyQualifiedName
-        };
-        stateMachine.States.Add(stateData);
+        // Manually update state machine with fixed delta time
+        stateMachine.DoUpdate(Time.fixedDeltaTime);
+    }
+}
+
+public class CustomUpdateLoop : MonoBehaviour
+{
+    private StateMachine stateMachine;
+    private float accumulatedTime;
+
+    void Start()
+    {
+        stateMachine = GetComponent<StateMachine>();
+        stateMachine.Initialize().Forget();
+    }
+
+    void Update()
+    {
+        // Custom time scaling
+        float scaledDelta = Time.deltaTime * Time.timeScale;
+        stateMachine.DoUpdate(scaledDelta);
     }
 }
 ```
@@ -483,34 +661,68 @@ public class StateFactory : MonoBehaviour
 ### State Communication Patterns
 
 ```csharp
-// Method 1: Direct state communication
-public class CommunicationState : StateDefinition
+// Method 1: Event-based communication
+public class EventDrivenState : StateDefinition
 {
-    public static event Action<string> OnStateMessage;
+    public static event Action<EventDrivenState> OnEntered;
+    public static event Action<EventDrivenState> OnExited;
 
-    public override async UniTask OnEnter()
+    protected override async UniTask OnEnter(StateDefinition from, object data)
     {
-        OnStateMessage?.Invoke("Entered " + GetType().Name);
+        OnEntered?.Invoke(this);
+        await UniTask.CompletedTask;
+    }
+
+    protected override async UniTask OnExit(StateDefinition to)
+    {
+        OnExited?.Invoke(this);
+        await UniTask.CompletedTask;
     }
 }
 
-// Method 2: Component-based messaging
-public class MessengerState : StateDefinition
+// Method 2: Shared data component
+public class SharedDataState : StateDefinition
 {
-    public override async UniTask OnEnter()
+    private SharedDataComponent sharedData;
+
+    protected override async UniTask OnEnter(StateDefinition from, object data)
     {
-        var messenger = GetComponent<StateMessenger>();
-        messenger.SendMessage("StateChanged", GetType().Name);
+        sharedData = GetComponent<SharedDataComponent>();
+        sharedData.CurrentState = GetType().Name;
+        sharedData.StateEnterTime = Time.time;
+        await UniTask.CompletedTask;
     }
+}
+
+// Method 3: Message passing via StateMachine
+public class MessagePassingState : StateDefinition
+{
+    public void SendMessageToOtherStates(string message)
+    {
+        foreach (var state in StateMachine.States)
+        {
+            if (state != this && state is IMessageReceiver receiver)
+            {
+                receiver.ReceiveMessage(message);
+            }
+        }
+    }
+}
+
+public interface IMessageReceiver
+{
+    void ReceiveMessage(string message);
 }
 ```
 
 ### Performance Considerations
 
-- **Assembly Scanning**: Use preferences to limit scanned assemblies
-- **State Updates**: Keep `OnUpdate` methods lightweight
-- **Object Pooling**: Reuse state instances when possible
-- **Transition Validation**: Cache transition lookups for frequently used states
+- **Assembly Scanning**: Configure via **Edit → Preferences → Gearbox** to limit scanned assemblies
+- **State Updates**: Keep `OnUpdate` methods lightweight; use `DoUpdate` for manual control
+- **Object Pooling**: Reuse state instances when possible with `AddState`/`RemoveState`
+- **Transition Validation**: Cache frequently used transition lookups
+- **Memory Management**: Use `Clear()` to release all state instances when needed
+- **Async Operations**: Use `Forget()` for fire-and-forget transitions in synchronous contexts
 
 ---
 
@@ -526,7 +738,7 @@ public class MessengerState : StateDefinition
 **A:** States are instantiated per StateMachine. Each StateMachine has its own instances with separate serialized data.
 
 ### **Q: How do transitions work?**
-**A:** Transitions are defined per state as a list of target state names. Use `TriggerTransition(currentState, index)` to activate them by index.
+**A:** Transitions can be triggered using multiple methods: by state name (`TransitionToNamed`), by type (`TransitionTo<T>`), or by instance (`TransitionToState`). You can also pass data objects during transitions for dynamic state configuration.
 
 ### **Q: Can I modify states at runtime?**
 **A:** Yes, but changes to the States list require reinitialization. Individual state properties can be modified directly.

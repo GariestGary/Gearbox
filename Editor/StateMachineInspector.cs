@@ -58,19 +58,13 @@ namespace VolumeBox.Gearbox.Editor
         {
             var stateProperty = statesProperty.GetArrayElementAtIndex(index);
             var instanceProperty = stateProperty.FindPropertyRelative("Instance");
-
             var foldoutId = $"state_{index}";
             _foldouts.TryAdd(foldoutId, false);
-
-            var instance = instanceProperty.managedReferenceValue as StateDefinition;
-            
-            // Safe state name handling
-            var stateName = instance == null || string.IsNullOrEmpty(instance.Name) ? "Unnamed State" : instance.Name;
-
-            // Check if this state is the initial state (only if instance exists)
+            var stateName = instanceProperty.managedReferenceValue
+                is not StateDefinition instance || string.IsNullOrEmpty(instance.Name)
+                ? "Unnamed State"
+                : instance.Name;
             var isInitialState = IsStateInitialState(stateProperty);
-
-            // Create custom style with yellowish background for initial state
             var boxStyle = new GUIStyle(EditorStyles.helpBox);
             var color = GUI.color;
             
@@ -83,41 +77,28 @@ namespace VolumeBox.Gearbox.Editor
             GUI.color = color;
             EditorGUILayout.BeginHorizontal();
             EditorGUI.indentLevel++;
-
-            // Draw foldout with "Initial" label if this is the initial state
             _foldouts[foldoutId] = EditorGUILayout.Foldout(_foldouts[foldoutId], stateName, true);
-            
-            GUILayout.FlexibleSpace(); // Add flexible space to push button to the right
-
             color = GUI.color;
             GUI.color = Color.red;
 
-            if (GUILayout.Button(EditorGUIUtility.IconContent("CrossIcon"), GUILayout.Width(15), GUILayout.Height(15)))
+            if (GUILayout.Button(EditorGUIUtility.IconContent("CrossIcon"), GUILayout.Width(18), GUILayout.Height(20), GUILayout.ExpandHeight(true)))
             {
                 RemoveState(statesProperty, index);
                 return;
             }
             
             GUI.color = color;
-
             EditorGUILayout.EndHorizontal();
-
-
             if (_foldouts[foldoutId])
             {
                 DrawSetInitialStateButton(stateProperty);
-                
                 EditorGUI.indentLevel++;
-
                 EditorGUILayout.PropertyField(instanceProperty);
-
                 EditorGUI.indentLevel--;
-                
                 EditorGUILayout.Space();
             }
             
             EditorGUI.indentLevel--;
-
             EditorGUILayout.EndVertical();
         }
 

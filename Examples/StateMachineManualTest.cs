@@ -29,7 +29,7 @@ namespace VolumeBox.Gearbox.Tests
             }
 
             // Initialize the state machine
-            _stateMachine.Initialize().Forget();
+            //_stateMachine.Initialize().Forget();
 
             Debug.Log("StateMachine Manual Test Started");
             Debug.Log($"Number of states: {_stateMachine.States.Count}");
@@ -50,7 +50,7 @@ namespace VolumeBox.Gearbox.Tests
                 if (targetState != null)
                 {
                     Debug.Log($"Transitioning to: {targetState.GetType().Name}");
-                    _stateMachine.TransitionToState(targetState);
+                    _stateMachine.TransitionToState(targetState).Forget();
                     Debug.Log($"Current state: {_stateMachine.CurrentState?.GetType().Name ?? "None"}");
                 }
             }

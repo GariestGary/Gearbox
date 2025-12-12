@@ -5,7 +5,6 @@ using VolumeBox.Gearbox.Core;
 
 namespace VolumeBox.Gearbox.Examples
 {
-    [StateCategory("Basic/Movement")]
     [System.Serializable]
     public class IdleState : StateDefinition
     {
@@ -50,7 +49,6 @@ namespace VolumeBox.Gearbox.Examples
         }
     }
 
-    [StateCategory("Basic/Movement")]
     [System.Serializable]
     public class MoveState : StateDefinition
     {
@@ -118,7 +116,6 @@ namespace VolumeBox.Gearbox.Examples
         }
     }
 
-    [StateCategory("Combat")]
     [System.Serializable]
     public class AttackState : StateDefinition
     {
@@ -177,7 +174,6 @@ namespace VolumeBox.Gearbox.Examples
         }
     }
 
-    [StateCategory("AI/Patrol")]
     [System.Serializable]
     public class PatrolState : StateDefinition
     {
@@ -243,7 +239,6 @@ namespace VolumeBox.Gearbox.Examples
         }
     }
 
-    [StateCategory("AI/Flee")]
     [System.Serializable]
     public class FleeState : StateDefinition
     {
