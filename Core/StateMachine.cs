@@ -233,7 +233,7 @@ namespace VolumeBox.Gearbox.Core
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error during state exit for '{state.GetType().Name}': {ex.Message}");
+                Debug.LogException(ex);
             }
         }
 
@@ -245,7 +245,7 @@ namespace VolumeBox.Gearbox.Core
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error during state enter for '{state.GetType().Name}': {ex.Message}");
+                Debug.LogException(ex);
             }
         }
 
