@@ -14,11 +14,13 @@ namespace VolumeBox.Gearbox.Editor
         private readonly Dictionary<string, bool> _foldouts = new();
         private SerializedProperty _statesProperty;
         private SerializedProperty _initializeOnStartProperty;
+        private SerializedProperty _updateAutomaticallyProperty;
 
         private void OnEnable()
         {
             _statesProperty = serializedObject.FindProperty("_states");
             _initializeOnStartProperty = serializedObject.FindProperty("_initializeOnStart");
+            _updateAutomaticallyProperty = serializedObject.FindProperty("_updateAutomatically");
         }
 
         public override void OnInspectorGUI()
@@ -30,6 +32,11 @@ namespace VolumeBox.Gearbox.Editor
             if (_initializeOnStartProperty != null)
             {
                 EditorGUILayout.PropertyField(_initializeOnStartProperty);
+            }
+
+            if (_updateAutomaticallyProperty != null)
+            {
+                EditorGUILayout.PropertyField(_updateAutomaticallyProperty);
             }
             
             EditorGUILayout.Space();
@@ -67,6 +74,7 @@ namespace VolumeBox.Gearbox.Editor
             var isInitialState = IsStateInitialState(stateProperty);
             var boxStyle = new GUIStyle(EditorStyles.helpBox);
             var color = GUI.color;
+            var removeRequested = false;
             
             if (isInitialState)
             {
@@ -83,13 +91,12 @@ namespace VolumeBox.Gearbox.Editor
 
             if (GUILayout.Button(EditorGUIUtility.IconContent("CrossIcon"), GUILayout.Width(18), GUILayout.Height(20), GUILayout.ExpandHeight(true)))
             {
-                RemoveState(statesProperty, index);
-                return;
+                removeRequested = true;
             }
             
             GUI.color = color;
             EditorGUILayout.EndHorizontal();
-            if (_foldouts[foldoutId])
+            if (!removeRequested && _foldouts[foldoutId])
             {
                 DrawSetInitialStateButton(stateProperty);
                 EditorGUI.indentLevel++;
@@ -100,6 +107,11 @@ namespace VolumeBox.Gearbox.Editor
             
             EditorGUI.indentLevel--;
             EditorGUILayout.EndVertical();
+
+            if (removeRequested)
+            {
+                RemoveState(statesProperty, index);
+            }
         }
 
         private bool IsStateInitialState(SerializedProperty stateProperty)
@@ -185,22 +197,14 @@ namespace VolumeBox.Gearbox.Editor
         {
             if (statesProperty == null) return;
 
-            statesProperty.InsertArrayElementAtIndex(statesProperty.arraySize);
+            statesProperty.arraySize++;
             var newElementIndex = statesProperty.arraySize - 1;
             var newElement = statesProperty.GetArrayElementAtIndex(newElementIndex);
-            
-            var nameProperty = newElement.FindPropertyRelative("Name");
-            var typeNameProperty = newElement.FindPropertyRelative("StateTypeName");
+            var isInitialProperty = newElement.FindPropertyRelative("IsInitial");
+            var instanceProperty = newElement.FindPropertyRelative("Instance");
 
-            if (nameProperty != null)
-            {
-                nameProperty.stringValue = $"State {statesProperty.arraySize}";
-            }
-
-            if (typeNameProperty != null)
-            {
-                typeNameProperty.stringValue = "";
-            }
+            isInitialProperty.boolValue = statesProperty.arraySize == 1;
+            instanceProperty.managedReferenceValue = null;
 
             serializedObject.ApplyModifiedProperties();
             ValidateInitialState();

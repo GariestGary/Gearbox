@@ -13,11 +13,13 @@ namespace VolumeBox.Gearbox.Core
     {
         [SerializeField] private List<StateData> _states = new();
         [SerializeField] private bool _initializeOnStart = true;
+        [SerializeField] private bool _updateAutomatically = true;
         
         private StateDefinition _initialState;
 
         private Action<StateDefinition> _stateInitializeAction;
         private List<StateDefinition> _initializedStates = new();
+        private bool _isTransitioning;
 
         /// <summary>
         /// List of all configured states in this state machine.
@@ -37,6 +39,14 @@ namespace VolumeBox.Gearbox.Core
             }
         }
 
+        private void Update()
+        {
+            if (_updateAutomatically && !_isTransitioning)
+            {
+                DoUpdate(Time.deltaTime);
+            }
+        }
+
         /// <summary>
         /// Sets a callback that will be invoked when each state is initialized.
         /// Useful for dependency injection or custom initialization logic.
@@ -49,24 +59,41 @@ namespace VolumeBox.Gearbox.Core
 
         public async UniTask Initialize()
         {
-            CurrentState = null;
-
-            // Instantiate state instances
-            foreach (var stateData in _states)
-            {
-                InitializeStateData(stateData);
-            }
-
-            if (_initializedStates.Count <= 0)
+            if (!TryBeginTransition("initialize the state machine"))
             {
                 return;
             }
-            
-            // Use serialized initial state or fallback to first state
-            var initialState = _initialState ?? _initializedStates[0];
 
-            // Set initial state if available
-            await EnterState(initialState);
+            try
+            {
+                if (CurrentState != null && !await ExecuteStateExit(CurrentState, null))
+                {
+                    return;
+                }
+
+                CurrentState = null;
+
+                // Instantiate state instances
+                foreach (var stateData in _states)
+                {
+                    InitializeStateData(stateData);
+                }
+
+                if (_initializedStates.Count <= 0)
+                {
+                    return;
+                }
+            
+                // Use serialized initial state or fallback to first state
+                var initialState = _initialState ?? _initializedStates[0];
+
+                // Set initial state if available
+                await EnterState(initialState);
+            }
+            finally
+            {
+                _isTransitioning = false;
+            }
         }
 
         public void SetInitialState(StateDefinition state)
@@ -81,7 +108,7 @@ namespace VolumeBox.Gearbox.Core
 
         private void InitializeStateData(StateData stateData)
         {
-            if (stateData.Instance == null)
+            if (stateData?.Instance == null)
             {
                 return;
             }
@@ -109,19 +136,83 @@ namespace VolumeBox.Gearbox.Core
 
         public void RemoveState(StateDefinition state)
         {
+            RemoveStateAsync(state).Forget();
+        }
+
+        public async UniTask RemoveStateAsync(StateDefinition state)
+        {
             if (state == null || !_initializedStates.Contains(state))
             {
                 return;
             }
 
-            _initializedStates.Remove(state);
+            if (!TryBeginTransition("remove a state"))
+            {
+                return;
+            }
+
+            try
+            {
+                if (CurrentState == state)
+                {
+                    if (!await ExecuteStateExit(state, null))
+                    {
+                        return;
+                    }
+
+                    CurrentState = null;
+                }
+
+                _initializedStates.Remove(state);
+                if (_initialState == state)
+                {
+                    _initialState = null;
+                }
+
+                state.StateMachine = null;
+            }
+            finally
+            {
+                _isTransitioning = false;
+            }
         }
 
         public void Clear()
         {
-            _initializedStates = new List<StateDefinition>();
-            CurrentState = null;
-            _stateInitializeAction = null;
+            ClearAsync().Forget();
+        }
+
+        public async UniTask ClearAsync()
+        {
+            if (!TryBeginTransition("clear the state machine"))
+            {
+                return;
+            }
+
+            try
+            {
+                if (CurrentState != null && !await ExecuteStateExit(CurrentState, null))
+                {
+                    return;
+                }
+
+                foreach (var state in _initializedStates)
+                {
+                    if (state != null)
+                    {
+                        state.StateMachine = null;
+                    }
+                }
+
+                _initializedStates.Clear();
+                CurrentState = null;
+                _initialState = null;
+                _stateInitializeAction = null;
+            }
+            finally
+            {
+                _isTransitioning = false;
+            }
         }
 
         /// <summary>
@@ -137,8 +228,7 @@ namespace VolumeBox.Gearbox.Core
                 return;
             }
 
-            var stateData = _states.Find(s => s.Instance == targetState);
-            if (stateData == null)
+            if (!_initializedStates.Contains(targetState))
             {
                 Debug.LogError($"State '{targetState.GetType().Name}' is not part of this state machine.");
                 return;
@@ -160,7 +250,7 @@ namespace VolumeBox.Gearbox.Core
                 return;
             }
 
-            var matchingStates = _initializedStates.FindAll(s => s.Name == stateName && s != null);
+            var matchingStates = _initializedStates.FindAll(s => s != null && s.Name == stateName);
             if (matchingStates.Count == 0)
             {
                 Debug.LogError($"State '{stateName}' not found or not initialized.");
@@ -211,48 +301,81 @@ namespace VolumeBox.Gearbox.Core
 
         private async UniTask PerformTransition(StateDefinition targetState, object data = null)
         {
-            var previousState = CurrentState;
-
-            // Exit current state
-            if (previousState != null)
+            if (!TryBeginTransition($"transition to '{targetState.Name ?? targetState.GetType().Name}'"))
             {
-                await ExecuteStateExit(previousState, targetState);
+                return;
             }
 
-            // Enter new state
-            await ExecuteStateEnter(targetState, previousState, data);
+            try
+            {
+                var previousState = CurrentState;
 
-            CurrentState = targetState;
+                // Exit current state. Keep it current if its exit hook fails.
+                if (previousState != null && !await ExecuteStateExit(previousState, targetState))
+                {
+                    return;
+                }
+
+                CurrentState = null;
+
+                // A state is active only after its enter hook completes successfully.
+                if (await ExecuteStateEnter(targetState, previousState, data))
+                {
+                    CurrentState = targetState;
+                }
+            }
+            finally
+            {
+                _isTransitioning = false;
+            }
         }
 
-        private async UniTask ExecuteStateExit(StateDefinition state, StateDefinition toState)
+        private async UniTask<bool> ExecuteStateExit(StateDefinition state, StateDefinition toState)
         {
             try
             {
                 await state.Exit(toState);
+                return true;
             }
             catch (Exception ex)
             {
                 Debug.LogException(ex);
+                return false;
             }
         }
 
-        private async UniTask ExecuteStateEnter(StateDefinition state, StateDefinition fromState, object data)
+        private async UniTask<bool> ExecuteStateEnter(StateDefinition state, StateDefinition fromState, object data)
         {
             try
             {
                 await state.Enter(fromState, data);
+                return true;
             }
             catch (Exception ex)
             {
                 Debug.LogException(ex);
+                return false;
             }
         }
 
         private async UniTask EnterState(StateDefinition state)
         {
-            await ExecuteStateEnter(state, null, null);
-            CurrentState = state;
+            if (await ExecuteStateEnter(state, null, null))
+            {
+                CurrentState = state;
+            }
+        }
+
+        private bool TryBeginTransition(string operation)
+        {
+            if (_isTransitioning)
+            {
+                Debug.LogWarning($"Cannot {operation} while another state-machine operation is in progress.", this);
+                return false;
+            }
+
+            _isTransitioning = true;
+            return true;
         }
 
         public void DoUpdate(float delta)

@@ -536,5 +536,45 @@ namespace VolumeBox.Gearbox.Tests
 
             Assert.AreEqual(typeof(MoveState), _stateMachine.CurrentState.GetType());
         }
+
+        [UnityTest]
+        public IEnumerator StateMachine_TransitionToRuntimeAddedStateInstance()
+        {
+            var idleState = new IdleState { Name = "Idle" };
+            var moveState = new MoveState { Name = "Move" };
+
+            _stateMachine.AddState(idleState);
+            _stateMachine.AddState(moveState);
+            yield return _stateMachine.Initialize().ToCoroutine();
+
+            yield return _stateMachine.TransitionToState(moveState).ToCoroutine();
+
+            Assert.AreSame(moveState, _stateMachine.CurrentState);
+        }
+
+        [UnityTest]
+        public IEnumerator StateMachine_RemoveActiveStateRunsExitAndClearsCurrentState()
+        {
+            var state = new ExitTrackingState { Name = "Tracked" };
+
+            _stateMachine.AddState(state);
+            yield return _stateMachine.Initialize().ToCoroutine();
+            yield return _stateMachine.RemoveStateAsync(state).ToCoroutine();
+
+            Assert.IsTrue(state.ExitCalled);
+            Assert.IsNull(_stateMachine.CurrentState);
+            Assert.IsFalse(_stateMachine.States.Contains(state));
+        }
+
+        private sealed class ExitTrackingState : StateDefinition
+        {
+            public bool ExitCalled { get; private set; }
+
+            protected override UniTask OnExit(StateDefinition to)
+            {
+                ExitCalled = true;
+                return UniTask.CompletedTask;
+            }
+        }
     }
 }
